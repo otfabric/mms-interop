@@ -1,0 +1,22 @@
+# Go
+*.test
+*.out
+coverage.html
+bin/
+
+# Go workspace (local only, not committed)
+go.work
+go.work.sum
+
+# Build artefacts
+adapters/*/build/
+adapters/*/dist/
+
+# Docker
+.docker/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+.DS_Store
