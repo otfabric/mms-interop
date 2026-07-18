@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-fixtures:
+    name: Validate fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate fixture syntax and cross-references
+        run: python3 scripts/validate-fixtures.py
+
+  build-and-smoke:
+    name: Build and smoke-test adapter images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build libiec61850 adapter image
+        run: make build-libiec61850
+
+      - name: Build iec61850bean adapter image
+        run: make build-iec61850bean
+
+      - name: Verify required binaries
+        run: make verify-binaries
+
+      - name: Verify fixture files in images
+        run: make verify-fixtures
+
+      # Run the full smoke suite: server ready events + client JSON Lines output.
+      # This validates every adapter command listed in COVERAGE.md:
+      #   libiec61850-mms-server, libiec61850-mms-client,
+      #   libiec61850-ied-server, libiec61850-ied-client,
+      #   libiec61850-ied-reporter,
+      #   iec61850bean-ied-server, iec61850bean-ied-client.
+      - name: Run adapter smoke tests
+        run: |
+          LIBIEC61850_IMAGE=mms-interop-libiec61850:local \
+          IEC61850BEAN_IMAGE=mms-interop-iec61850bean:local \
+          ./scripts/smoke-test.sh
+
+      - name: Record build provenance
+        if: always()
+        run: |
+          LIBIEC61850_SHA=$(grep 'LIBIEC61850_SHA=' adapters/libiec61850/Dockerfile \
+            | head -1 | cut -d= -f2)
+          IEC61850BEAN_VERSION=$(grep 'iec61850bean:' adapters/iec61850bean/pom.xml \
+            | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          echo "mms-interop SHA : ${{ github.sha }}"
+          echo "libiec61850 SHA : ${LIBIEC61850_SHA}"
+          echo "iec61850bean    : ${IEC61850BEAN_VERSION:-1.9.0}"
+          echo "platform        : linux/amd64"

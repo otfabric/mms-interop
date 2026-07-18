@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.otfabric</groupId>
+  <artifactId>iec61850bean-adapter</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <description>mms-interop Phase 2B iec61850bean IED adapter</description>
+
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- IEC 61850 / MMS stack — the only released Maven artifact on Central. -->
+    <dependency>
+      <groupId>com.beanit</groupId>
+      <artifactId>iec61850bean</artifactId>
+      <version>1.9.0</version>
+    </dependency>
+
+    <!--
+      Logback — required by iec61850bean server-side code (slf4j binding).
+      Keep the version aligned with the transitive dependency declared by
+      iec61850bean 1.9.0 so Maven does not upgrade it unexpectedly.
+    -->
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>1.2.3</version>
+    </dependency>
+
+    <!-- Jackson — for parsing values.json without rolling a custom parser. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.17.2</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        Shade plugin — produce a single self-contained fat JAR so that
+        the runtime image only needs a plain JRE (no Maven, no classpath setup).
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <outputFile>${project.build.directory}/iec61850bean-adapter.jar</outputFile>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>org.otfabric.interop.Main</mainClass>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,86 @@
+name: Validate fixtures
+
+# Run on every PR that touches fixtures, scripts or this workflow itself.
+# Also runs as part of CI/PR by calling the shared Python validator.
+on:
+  pull_request:
+    paths:
+      - 'fixtures/**'
+      - 'scripts/validate-fixtures.py'
+      - '.github/workflows/validate-fixtures.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'fixtures/**'
+      - 'scripts/validate-fixtures.py'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate fixture files
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 1. JSON syntax: interop.json and values.json
+      # -----------------------------------------------------------------------
+      - name: interop.json — JSON syntax
+        run: python3 -m json.tool fixtures/mms/interop.json > /dev/null
+
+      - name: values.json — JSON syntax
+        run: python3 -m json.tool fixtures/iec61850/values.json > /dev/null
+
+      # -----------------------------------------------------------------------
+      # 2. XML syntax: interop.icd
+      # -----------------------------------------------------------------------
+      - name: interop.icd — XML syntax
+        run: |
+          python3 -c "
+          import xml.etree.ElementTree as ET
+          ET.parse('fixtures/iec61850/interop.icd')
+          print('interop.icd: valid XML')
+          "
+
+      # -----------------------------------------------------------------------
+      # 3. Cross-validation: values.json refs → ICD objects,
+      #    dataset members → ICD objects, URCB DatSet → dataset
+      # -----------------------------------------------------------------------
+      - name: Cross-validate fixtures
+        run: python3 scripts/validate-fixtures.py
+
+      # -----------------------------------------------------------------------
+      # 4. genmodel.py — verify the ICD still generates valid static C code.
+      #    Requires libiec61850 toolchain: clone from the pinned SHA.
+      # -----------------------------------------------------------------------
+      - name: Install Java (for genmodel.jar)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            default-jre-headless git ca-certificates
+
+      - name: Clone libiec61850 at pinned SHA
+        run: |
+          LIBIEC61850_SHA=$(grep 'LIBIEC61850_SHA=' adapters/libiec61850/Dockerfile \
+            | head -1 | cut -d= -f2)
+          echo "Cloning libiec61850 at SHA: ${LIBIEC61850_SHA}"
+          git clone https://github.com/mz-automation/libiec61850.git /tmp/libiec61850
+          git -C /tmp/libiec61850 checkout "${LIBIEC61850_SHA}"
+
+      - name: genmodel.jar — generate static model from interop.icd
+        run: |
+          # At the pinned SHA the model generator is a Java JAR, not a Python script.
+          GENMODEL=$(find /tmp/libiec61850 -name 'genmodel.jar' | head -1)
+          if [ -z "$GENMODEL" ]; then
+            echo "ERROR: genmodel.jar not found in libiec61850 checkout"
+            find /tmp/libiec61850/tools -type f | sort || true
+            exit 1
+          fi
+          echo "Using genmodel.jar at: ${GENMODEL}"
+          java -jar "${GENMODEL}" fixtures/iec61850/interop.icd -ied InteropIED -ap AP1
+          # genmodel.jar writes static_model.c and static_model.h into the
+          # current directory. Verify the files were created and are non-empty.
+          test -s static_model.c && echo "static_model.c: OK"
+          test -s static_model.h && echo "static_model.h: OK"

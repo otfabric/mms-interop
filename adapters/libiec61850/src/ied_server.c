@@ -1,0 +1,155 @@
+/* SPDX-License-Identifier: MIT */
+/*
+ * ied_server.c — libIEC61850 IED server adapter for mms-interop.
+ *
+ * Phase 2A Step 8: IED server direction
+ *   go-iec61850 client ← libiec61850 IED server
+ *
+ * The IED model is compiled from static_model.h / static_model.c generated
+ * by genmodel.py from fixtures/iec61850/interop.icd during the Docker build.
+ * Symbols follow the iedModel_<LD>_<LN>_<DO>[_<DA>...] convention.
+ *
+ * Initial attribute values are set programmatically to match values.json.
+ *
+ * Usage:
+ *   libiec61850-ied-server [--port PORT]
+ *
+ * Lifecycle:
+ *   1. Parse --port (default 1102).
+ *   2. Create IedServer from the static model.
+ *   3. Set initial attribute values.
+ *   4. Start listening.
+ *   5. Emit {"event":"ready","address":"0.0.0.0:<port>"} to stdout.
+ *   6. Wait for SIGTERM / SIGINT.
+ *   7. Stop and destroy.
+ *
+ * Exit codes:
+ *   0  — clean shutdown
+ *   1  — startup / argument error
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+
+#include "iec61850_server.h"
+#include "hal_thread.h"
+#include "static_model.h"
+#include "jsonlines.h"
+
+/* -------------------------------------------------------------------------
+ * Signal handling
+ * ---------------------------------------------------------------------- */
+
+static volatile sig_atomic_t g_running = 1;
+
+static void sig_handler(int sig)
+{
+    (void)sig;
+    g_running = 0;
+}
+
+/* -------------------------------------------------------------------------
+ * Initial value setup
+ *
+ * Values match fixtures/iec61850/values.json exactly.
+ * ---------------------------------------------------------------------- */
+
+static void set_initial_values(IedServer server)
+{
+    /* LLN0.Mod.stVal = 1 (on) */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_LLN0_Mod_stVal,
+        MmsValue_newInteger(1));
+
+    /* LLN0.Mod.ctlModel = 1 (direct-with-normal-security) */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_LLN0_Mod_ctlModel,
+        MmsValue_newInteger(1));
+
+    /* LLN0.Mod.d = "mode" */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_LLN0_Mod_d,
+        MmsValue_newVisibleString("mode"));
+
+    /* LLN0.Beh.stVal = 1 (on) */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_LLN0_Beh_stVal,
+        MmsValue_newInteger(1));
+
+    /* GGIO1.SPS1.stVal = false */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPS1_stVal,
+        MmsValue_newBoolean(false));
+
+    /* GGIO1.SPS1.d = "status point" */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPS1_d,
+        MmsValue_newVisibleString("status point"));
+
+    /* GGIO1.SPCSO1.stVal = false */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO1_stVal,
+        MmsValue_newBoolean(false));
+
+    /* GGIO1.SPCSO1.ctlModel = 1 (direct-with-normal-security) */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO1_ctlModel,
+        MmsValue_newInteger(1));
+
+    /* MMXU1.TotW.mag.f = 1234.5 */
+    IedServer_updateAttributeValue(server,
+        &iedModel_InteropLD_MMXU1_TotW_mag_f,
+        MmsValue_newFloat(1234.5f));
+}
+
+/* -------------------------------------------------------------------------
+ * main
+ * ---------------------------------------------------------------------- */
+
+int main(int argc, char** argv)
+{
+    int port = 1102;
+
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--port") && i + 1 < argc)
+            port = atoi(argv[++i]);
+    }
+    if (port <= 0 || port > 65535) {
+        fprintf(stderr, "ied-server: invalid port %d\n", port);
+        return 1;
+    }
+
+    signal(SIGTERM, sig_handler);
+    signal(SIGINT,  sig_handler);
+
+    IedServer server = IedServer_create(&iedModel);
+    if (!server) {
+        fprintf(stderr, "ied-server: IedServer_create failed\n");
+        return 1;
+    }
+
+    /* Allow all writes so the interop write test succeeds. */
+    IedServer_setWriteAccessPolicy(server, IEC61850_FC_ALL, ACCESS_POLICY_ALLOW);
+
+    set_initial_values(server);
+
+    IedServer_start(server, port);
+    if (!IedServer_isRunning(server)) {
+        fprintf(stderr, "ied-server: failed to start on port %d\n", port);
+        IedServer_destroy(server);
+        return 1;
+    }
+
+    char addr_buf[64];
+    snprintf(addr_buf, sizeof(addr_buf), "0.0.0.0:%d", port);
+    jl_ready(addr_buf, "iec61850-v1", "libiec61850");
+
+    while (g_running)
+        Thread_sleep(100);
+
+    IedServer_stop(server);
+    IedServer_destroy(server);
+    return 0;
+}
