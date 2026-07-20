@@ -136,3 +136,19 @@ target_link_libraries(libiec61850-ied-reporter
     pthread
     m
 )
+
+# ---------------------------------------------------------------------------
+# libiec61850-ied-controller   (Phase 2E)
+#
+# Direct-control client: reads ctlModel, issues Oper on GGIO1.SPCSO1, reads
+# back stVal.  Uses public IedConnection + ControlObjectClient API only.
+# ---------------------------------------------------------------------------
+add_executable(libiec61850-ied-controller
+    ied_controller.c
+)
+target_link_libraries(libiec61850-ied-controller
+    ${LIBIEC61850_LIB}
+    ${LIBIEC61850_HAL_LIB}
+    pthread
+    m
+)

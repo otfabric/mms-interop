@@ -46,9 +46,21 @@ public final class JsonLines {
                 + ",\"ok\":true,\"value\":" + value + "}");
     }
 
+    /** Emit a successful read result with a named operation (boolean). */
+    public static void successReadBoolOp(String operation, String target, boolean value) {
+        emit("{\"operation\":" + quote(operation) + ",\"target\":" + quote(target)
+                + ",\"ok\":true,\"value\":" + value + "}");
+    }
+
     /** Emit a successful read result (integer). */
     public static void successReadInt(String target, long value) {
         emit("{\"operation\":\"read\",\"target\":" + quote(target)
+                + ",\"ok\":true,\"value\":" + value + "}");
+    }
+
+    /** Emit a successful read result with a named operation (integer). */
+    public static void successReadIntOp(String operation, String target, long value) {
+        emit("{\"operation\":" + quote(operation) + ",\"target\":" + quote(target)
                 + ",\"ok\":true,\"value\":" + value + "}");
     }
 

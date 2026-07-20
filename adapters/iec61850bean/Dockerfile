@@ -5,11 +5,13 @@
 #       -f adapters/iec61850bean/Dockerfile \
 #       -t mms-interop-iec61850bean:local .
 #
-# The image contains two named entry points:
-#   iec61850bean-ied-server  --port <port> [--icd <path>] [--values <path>]
-#   iec61850bean-ied-client  --host <host> --port <port>
+# The image contains four named entry points:
+#   iec61850bean-ied-server     --port <port> [--icd <path>] [--values <path>]
+#   iec61850bean-ied-client     --host <host> --port <port>
+#   iec61850bean-ied-reporter   --host <host> --port <port> [--sps1-initial 0|1]
+#   iec61850bean-ied-controller --host <host> --port <port> [--ctlval 0|1]
 #
-# Both programs are dispatched via Main.java using a subcommand argument.
+# All programs are dispatched via Main.java using a subcommand argument.
 # Fixtures are baked in at /fixtures/iec61850/ (interop.icd, values.json).
 
 ARG MAVEN_DIGEST=sha256:3a4ab3276a087bf276f79cae96b1af04f53731bec53fb2e651aca79e4b10211e
@@ -49,8 +51,14 @@ RUN printf '#!/bin/sh\nexec java -jar /app/iec61850bean-adapter.jar server "$@"\
       > /usr/local/bin/iec61850bean-ied-server \
  && printf '#!/bin/sh\nexec java -jar /app/iec61850bean-adapter.jar client "$@"\n' \
       > /usr/local/bin/iec61850bean-ied-client \
+ && printf '#!/bin/sh\nexec java -jar /app/iec61850bean-adapter.jar reporter "$@"\n' \
+      > /usr/local/bin/iec61850bean-ied-reporter \
+ && printf '#!/bin/sh\nexec java -jar /app/iec61850bean-adapter.jar controller "$@"\n' \
+      > /usr/local/bin/iec61850bean-ied-controller \
  && chmod +x /usr/local/bin/iec61850bean-ied-server \
-             /usr/local/bin/iec61850bean-ied-client
+             /usr/local/bin/iec61850bean-ied-client \
+             /usr/local/bin/iec61850bean-ied-reporter \
+             /usr/local/bin/iec61850bean-ied-controller
 
 USER adapter
 

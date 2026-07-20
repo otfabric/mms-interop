@@ -8,9 +8,15 @@
     "InteropLD/GGIO1.SPS1.d":         "status point",
     "InteropLD/GGIO1.SPCSO1.stVal":   false,
     "InteropLD/GGIO1.SPCSO1.ctlModel": 1,
+    "InteropLD/GGIO1.SPCSO2.stVal":   false,
+    "InteropLD/GGIO1.SPCSO2.ctlModel": 2,
+    "InteropLD/GGIO1.SPCSO3.stVal":   false,
+    "InteropLD/GGIO1.SPCSO3.ctlModel": 4,
     "InteropLD/MMXU1.TotW.mag.f":     1234.5
   },
   "writable": [
-    "InteropLD/GGIO1.SPCSO1"
+    "InteropLD/GGIO1.SPCSO1",
+    "InteropLD/GGIO1.SPCSO2",
+    "InteropLD/GGIO1.SPCSO3"
   ]
 }

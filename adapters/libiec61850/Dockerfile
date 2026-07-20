@@ -114,7 +114,8 @@ COPY --from=adapter-build /src/adapter/build/libiec61850-mms-server   /usr/local
 COPY --from=adapter-build /src/adapter/build/libiec61850-mms-client   /usr/local/bin/
 COPY --from=adapter-build /src/adapter/build/libiec61850-ied-server   /usr/local/bin/
 COPY --from=adapter-build /src/adapter/build/libiec61850-ied-client   /usr/local/bin/
-COPY --from=adapter-build /src/adapter/build/libiec61850-ied-reporter /usr/local/bin/
+COPY --from=adapter-build /src/adapter/build/libiec61850-ied-reporter    /usr/local/bin/
+COPY --from=adapter-build /src/adapter/build/libiec61850-ied-controller /usr/local/bin/
 
 COPY fixtures/mms/interop.json      /fixtures/mms/interop.json
 COPY fixtures/iec61850/interop.icd  /fixtures/iec61850/interop.icd

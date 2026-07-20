@@ -90,9 +90,68 @@ static void set_initial_values(IedServer server)
     IedServer_updateInt32AttributeValue(server,
         &iedModel_InteropLD_GGIO1_SPCSO1_ctlModel, 1);
 
+    /* GGIO1.SPCSO2.stVal = false */
+    IedServer_updateBooleanAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO2_stVal, false);
+
+    /* GGIO1.SPCSO2.ctlModel = 2 (sbo-with-normal-security) */
+    IedServer_updateInt32AttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO2_ctlModel, 2);
+
+    /* GGIO1.SPCSO3.stVal = false */
+    IedServer_updateBooleanAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO3_stVal, false);
+
+    /* GGIO1.SPCSO3.ctlModel = 4 (sbo-with-enhanced-security) */
+    IedServer_updateInt32AttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO3_ctlModel, 4);
+
     /* MMXU1.TotW.mag.f = 1234.5 */
     IedServer_updateFloatAttributeValue(server,
         &iedModel_InteropLD_MMXU1_TotW_mag_f, 1234.5f);
+}
+
+/* -------------------------------------------------------------------------
+ * Control handlers
+ *
+ * Updates SPCSO1.stVal (direct) or SPCSO2.stVal (SBO normal) when an
+ * Operate command is received.
+ * ---------------------------------------------------------------------- */
+
+static ControlHandlerResult
+spcso1_control_handler(ControlAction action, void* parameter, MmsValue* value, bool test)
+{
+    IedServer server = (IedServer)parameter;
+    if (!test && value != NULL) {
+        bool ctlVal = MmsValue_getBoolean(value);
+        IedServer_updateBooleanAttributeValue(server,
+            &iedModel_InteropLD_GGIO1_SPCSO1_stVal, ctlVal);
+    }
+    return CONTROL_RESULT_OK;
+}
+
+static ControlHandlerResult
+spcso2_control_handler(ControlAction action, void* parameter, MmsValue* value, bool test)
+{
+    IedServer server = (IedServer)parameter;
+    if (!test && value != NULL) {
+        bool ctlVal = MmsValue_getBoolean(value);
+        IedServer_updateBooleanAttributeValue(server,
+            &iedModel_InteropLD_GGIO1_SPCSO2_stVal, ctlVal);
+    }
+    return CONTROL_RESULT_OK;
+}
+
+static ControlHandlerResult
+spcso3_control_handler(ControlAction action, void* parameter, MmsValue* value, bool test)
+{
+    IedServer server = (IedServer)parameter;
+    if (!test && value != NULL) {
+        bool ctlVal = MmsValue_getBoolean(value);
+        IedServer_updateBooleanAttributeValue(server,
+            &iedModel_InteropLD_GGIO1_SPCSO3_stVal, ctlVal);
+    }
+    return CONTROL_RESULT_OK;
 }
 
 /* -------------------------------------------------------------------------
@@ -130,6 +189,30 @@ int main(int argc, char** argv)
     IedServer_setWriteAccessPolicy(server, IEC61850_FC_SP, ACCESS_POLICY_ALLOW);
 
     set_initial_values(server);
+
+    /* Register direct-control handler for SPCSO1 so that Operate commands
+     * update stVal. Without this, libiec61850 accepts the MMS write but
+     * does not propagate ctlVal to the status attribute. */
+    IedServer_setControlHandler(server,
+        &iedModel_InteropLD_GGIO1_SPCSO1,
+        spcso1_control_handler,
+        (void*)server);
+
+    /* Register SBO-normal control handler for SPCSO2. libiec61850 handles
+     * the SBO select/operate protocol automatically when ctlModel=2; the
+     * handler is only called after a successful select+operate sequence. */
+    IedServer_setControlHandler(server,
+        &iedModel_InteropLD_GGIO1_SPCSO2,
+        spcso2_control_handler,
+        (void*)server);
+
+    /* Register SBO-enhanced (SBOw) control handler for SPCSO3.
+     * libiec61850 validates the SelectWithValue + Operate sequence; the
+     * handler is only invoked after a successful SBOw select+operate. */
+    IedServer_setControlHandler(server,
+        &iedModel_InteropLD_GGIO1_SPCSO3,
+        spcso3_control_handler,
+        (void*)server);
 
     IedServer_start(server, port);
     if (!IedServer_isRunning(server)) {

@@ -6,7 +6,9 @@
   Access pt : AP1
   LD        : InteropLD
     LN0  — LLN0 (Mod: INC, Beh: INS)
-    GGIO1 — SPS1 (SPS — boolean status), SPCSO1 (SPC — controllable)
+    GGIO1 — SPS1 (SPS — boolean status), SPCSO1 (SPC — direct),
+             SPCSO2 (SPC — SBO normal, ctlModel=2),
+             SPCSO3 (SPC — SBO enhanced/SBOw, ctlModel=4)
     MMXU1 — TotW (MV — measured active power)
   Dataset   : LLN0.dsInterop (SPS1.stVal[ST], Mod.stVal[ST])
   Report    : LLN0.urcb01 (unbuffered, triggers on data change / GI)
@@ -41,7 +43,7 @@
           <LN0 lnClass="LLN0" inst="" lnType="LLN0_Type"
                desc="Logical node zero">
             <DOI name="Mod">
-              <DAI name="ctlModel"><Val>1</Val></DAI>
+              <DAI name="ctlModel"><Val>direct-with-normal-security</Val></DAI>
             </DOI>
             <DataSet name="dsInterop" desc="Interop dataset">
               <!-- Two scalar members — avoids MMS struct serialisation in Phase 2A -->
@@ -64,7 +66,13 @@
           <LN prefix="" lnClass="GGIO" inst="1" lnType="GGIO1_Type"
               desc="Generic IO">
             <DOI name="SPCSO1">
-              <DAI name="ctlModel"><Val>1</Val></DAI>
+              <DAI name="ctlModel"><Val>direct-with-normal-security</Val></DAI>
+            </DOI>
+            <DOI name="SPCSO2">
+              <DAI name="ctlModel"><Val>sbo-with-normal-security</Val></DAI>
+            </DOI>
+            <DOI name="SPCSO3">
+              <DAI name="ctlModel"><Val>sbo-with-enhanced-security</Val></DAI>
             </DOI>
           </LN>
           <LN prefix="" lnClass="MMXU" inst="1" lnType="MMXU1_Type"
@@ -89,6 +97,8 @@
     <LNodeType id="GGIO1_Type" lnClass="GGIO" desc="Generic IO">
       <DO name="SPS1"   type="SPS_Type"/>
       <DO name="SPCSO1" type="SPC_Type"/>
+      <DO name="SPCSO2" type="SPC_Type"/>
+      <DO name="SPCSO3" type="SPC_Type"/>
     </LNodeType>
 
     <LNodeType id="MMXU1_Type" lnClass="MMXU" desc="Measurement unit">
@@ -125,10 +135,15 @@
 
     <!-- SPC: Single-point controllable (GGIO1.SPCSO1) -->
     <DOType id="SPC_Type" cdc="SPC" desc="Single point controllable">
-      <DA name="stVal"    fc="ST" bType="BOOLEAN"  dchg="true" qchg="false"/>
-      <DA name="q"        fc="ST" bType="Quality"  qchg="true"/>
+      <DA name="stVal"    fc="ST" bType="BOOLEAN"    dchg="true" qchg="false"/>
+      <DA name="q"        fc="ST" bType="Quality"    qchg="true"/>
       <DA name="t"        fc="ST" bType="Timestamp"/>
-      <DA name="ctlModel" fc="CF" bType="Enum"     type="CtlModels"/>
+      <DA name="ctlModel" fc="CF" bType="Enum"       type="CtlModels"/>
+      <!-- IEC 61850-7-3 mandatory CO attributes for controllable DOs -->
+      <DA name="Oper"     fc="CO" bType="Struct"     type="OperSPC_Type"/>
+      <DA name="SBO"      fc="CO" bType="VisString255"/>
+      <DA name="SBOw"     fc="CO" bType="Struct"     type="OperSPC_Type"/>
+      <DA name="Cancel"   fc="CO" bType="Struct"     type="OperSPC_Type"/>
     </DOType>
 
     <!-- MV: Measured value (MMXU1.TotW) -->
@@ -146,6 +161,22 @@
       <BDA name="f" bType="FLOAT32"/>
     </DAType>
 
+    <!-- OperSPC: control structure for SPC (IEC 61850-7-3) -->
+    <DAType id="OperSPC_Type" desc="Operate structure for SPC">
+      <BDA name="ctlVal" bType="BOOLEAN"/>
+      <BDA name="origin" bType="Struct"    type="Originator_Type"/>
+      <BDA name="ctlNum" bType="INT8U"/>
+      <BDA name="T"      bType="Timestamp"/>
+      <BDA name="Test"   bType="BOOLEAN"/>
+      <BDA name="Check"  bType="Check"/>
+    </DAType>
+
+    <!-- Originator: originatorCategory + orIdent -->
+    <DAType id="Originator_Type" desc="Originator">
+      <BDA name="orCat"   bType="Enum"    type="OrCat"/>
+      <BDA name="orIdent" bType="Octet64"/>
+    </DAType>
+
     <!-- ================================================================== -->
     <!-- Enumeration types                                                    -->
     <!-- ================================================================== -->
@@ -156,6 +187,18 @@
       <EnumVal ord="2">sbo-with-normal-security</EnumVal>
       <EnumVal ord="3">direct-with-enhanced-security</EnumVal>
       <EnumVal ord="4">sbo-with-enhanced-security</EnumVal>
+    </EnumType>
+
+    <EnumType id="OrCat" desc="Originator category">
+      <EnumVal ord="0">not-supported</EnumVal>
+      <EnumVal ord="1">bay-control</EnumVal>
+      <EnumVal ord="2">station-control</EnumVal>
+      <EnumVal ord="3">remote-control</EnumVal>
+      <EnumVal ord="4">automatic-bay</EnumVal>
+      <EnumVal ord="5">automatic-station</EnumVal>
+      <EnumVal ord="6">automatic-remote</EnumVal>
+      <EnumVal ord="7">maintenance</EnumVal>
+      <EnumVal ord="8">process</EnumVal>
     </EnumType>
 
   </DataTypeTemplates>

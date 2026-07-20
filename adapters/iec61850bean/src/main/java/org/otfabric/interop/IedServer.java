@@ -58,10 +58,54 @@ public class IedServer {
             stopped.countDown();
         }));
 
+        // Pre-resolve DO name → stVal BDA map for all SPC control objects.
+        // The write handler uses the BDA's toString() reference path to look up
+        // the corresponding stVal because iec61850bean passes per-request copies
+        // of the leaf BDA, making identity comparison unreliable.
+        java.util.Map<String, BdaBoolean> stValByDoName = new java.util.HashMap<>();
+        for (String doName : new String[]{"SPCSO1", "SPCSO2", "SPCSO3"}) {
+            ModelNode stValNode = model.findModelNode(
+                iedName + "InteropLD/GGIO1." + doName + ".stVal", Fc.ST);
+            if (stValNode instanceof BdaBoolean stValBda) {
+                stValByDoName.put(doName, stValBda);
+            }
+        }
+
         sap.startListening(new ServerEventListener() {
+            // Pattern: reference has the form "...LD/GGIO1.<DONAME>.Oper.ctlVal"
+            // Also matches SBOw writes: "...LD/GGIO1.<DONAME>.SBOw.ctlVal"
+            final java.util.regex.Pattern DO_PAT =
+                java.util.regex.Pattern.compile("/GGIO1\\.([^.]+)\\.(Oper|SBOw)\\.ctlVal");
+
             @Override
             public List<ServiceError> write(List<BasicDataAttribute> bdas) {
-                // Accept all writes so the go-iec61850 client write test passes.
+                // Accept all writes.  When ctlVal[CO] of any SPCSO.Oper or SPCSO.SBOw is written,
+                // reflect the commanded value into the corresponding stVal[ST].
+                // For SBOw (select-with-value) the stVal update is deferred: we only update
+                // stVal when Oper (the actual operate) is received, not on the SBOw select.
+                for (BasicDataAttribute bda : bdas) {
+                    if (!(bda instanceof BdaBoolean bdaBool)
+                            || bda.getFc() != Fc.CO
+                            || !"ctlVal".equals(bda.getName())) {
+                        continue;
+                    }
+                    // iec61850bean passes per-request copies; parse the full
+                    // reference from toString() to identify the parent DO and operation.
+                    java.util.regex.Matcher m = DO_PAT.matcher(bda.toString());
+                    if (!m.find()) {
+                        continue;
+                    }
+                    String doName  = m.group(1);
+                    String opName  = m.group(2);
+                    // Only update stVal on the actual Operate, not on SBOw (select).
+                    if (!"Oper".equals(opName)) {
+                        continue;
+                    }
+                    BdaBoolean stValBda = stValByDoName.get(doName);
+                    if (stValBda != null) {
+                        stValBda.setValue(bdaBool.getValue());
+                    }
+                }
                 return null;
             }
 
@@ -93,6 +137,10 @@ public class IedServer {
         setStr(  model, pfx + "GGIO1.SPS1.d",         Fc.DC, fv.getString("InteropLD/GGIO1.SPS1.d"));
         setBool( model, pfx + "GGIO1.SPCSO1.stVal",   Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPCSO1.stVal"));
         setInt8( model, pfx + "GGIO1.SPCSO1.ctlModel",Fc.CF, fv.getInt("InteropLD/GGIO1.SPCSO1.ctlModel"));
+        setBool( model, pfx + "GGIO1.SPCSO2.stVal",   Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPCSO2.stVal"));
+        setInt8( model, pfx + "GGIO1.SPCSO2.ctlModel",Fc.CF, fv.getInt("InteropLD/GGIO1.SPCSO2.ctlModel"));
+        setBool( model, pfx + "GGIO1.SPCSO3.stVal",   Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPCSO3.stVal"));
+        setInt8( model, pfx + "GGIO1.SPCSO3.ctlModel",Fc.CF, fv.getInt("InteropLD/GGIO1.SPCSO3.ctlModel"));
         setFloat(model, pfx + "MMXU1.TotW.mag.f",     Fc.MX, fv.getFloat("InteropLD/MMXU1.TotW.mag.f"));
     }
 
