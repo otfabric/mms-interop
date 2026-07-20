@@ -791,6 +791,7 @@ static int run_sequence(const char* host, int port, int full_sequence)
 
 int main(int argc, char* argv[])
 {
+    jl_handle_meta_flags(argc, argv, "libiec61850");
     const char* host = "127.0.0.1";
     int         port = 1102;
 

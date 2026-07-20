@@ -62,6 +62,7 @@
 #include <stdbool.h>
 
 #include "iec61850_client.h"
+#include "jsonlines.h"
 
 /* -------------------------------------------------------------------------
  * Per-DO configuration
@@ -265,6 +266,7 @@ static bool op_read_stval(IedConnection conn, const DoConfig* cfg)
 
 int main(int argc, char** argv)
 {
+    jl_handle_meta_flags(argc, argv, "libiec61850");
     const char* host = "localhost";
     int         port = 1102;
     bool        ctlVal = true;

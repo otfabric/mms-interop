@@ -160,6 +160,7 @@ spcso3_control_handler(ControlAction action, void* parameter, MmsValue* value, b
 
 int main(int argc, char** argv)
 {
+    jl_handle_meta_flags(argc, argv, "libiec61850");
     int port = 1102;
 
     for (int i = 1; i < argc; i++) {
@@ -223,7 +224,7 @@ int main(int argc, char** argv)
 
     char addr_buf[64];
     snprintf(addr_buf, sizeof(addr_buf), "0.0.0.0:%d", port);
-    jl_ready(addr_buf, "iec61850-v1", "libiec61850", iedModel.name);
+    jl_ready(addr_buf, "iec61850-v2", "libiec61850", iedModel.name);
 
     while (g_running)
         Thread_sleep(100);

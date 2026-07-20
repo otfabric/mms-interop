@@ -1,174 +1,205 @@
-# mms-interop — Plan
+# mms-interop — Roadmap
+
+This file is the single source of truth for `mms-interop` work items.
+It is updated as phases complete and new work is scoped.
+
+The master roadmap for the entire OTFabric IEC 61850 MMS stack is described in
+`go-iec61850/PLAN.md`. This file contains only the `mms-interop`-owned deliverables.
 
 ---
 
-## 1. Scope and principles
+## Current release: v0.1.1
 
-### Purpose
-
-`mms-interop` is **interoperability infrastructure**, not the primary test owner for the Go libraries.
-
-It provides:
-- Independent adapter implementations (libiec61850, iec61850bean) in reproducible Docker images.
-- Deterministic fixture files (`interop.json`, `interop.icd`, `values.json`) that define the canonical model and values.
-- The JSON Lines adapter contract that all consumers depend on.
-- Published adapter images versioned at `ghcr.io/otfabric/`.
-
-**`go-mms` and `go-iec61850` own:**
-- Which public API calls are exercised.
-- Expected library behaviour and error semantics.
-- All assertions.
-- Release gating.
-- Regression diagnosis and compatibility claims for their own implementation.
-- Compatibility matrices and feature roadmaps.
-
-**`mms-interop` owns:**
-- The independent adapter implementations.
-- Fixture models and runtime values.
-- Docker packaging and adapter image publication.
-- The adapter startup and command contracts.
-- Fixed external-stack behaviour and versioning.
-- Adapter self-tests (image starts, readiness output is valid, JSON Lines output is syntactically correct, required binaries are present).
-
-### Repository relationship
-
-```
-               mms-interop
-          containers + fixtures
-               /           \
-              /             \
-         go-mms           go-iec61850
-      interop/             interop/
-   owns MMS tests      owns IEC 61850 tests
-```
-
-Consumer repositories pin a specific adapter image. They start containers, wait for the readiness event, exercise the Go library under test, and assert results — all within their own `interop/` package (behind `-tags=interop`).
-
-This mirrors the `go-s7comm` / `snap7-interop` pattern.
-
-### Adapter evolution policy
-
-Adapter infrastructure is extended only when a consumer repository adds a concrete interoperability requirement that cannot be satisfied by the existing adapter commands or fixtures. Examples:
-
-- A new adapter command (e.g. `libiec61850-ied-reporter`) required when `go-iec61850` needed to test URCB server-direction reporting.
-- A new fixture attribute required when `go-mms` adds a type that is not yet in `interop.json`.
-- A new dataset member required when `go-iec61850` tests multi-member reports.
-
-`mms-interop` does not independently decide which Go library feature to cover next. That decision belongs to each Go repository's own roadmap.
-
-### Constraints
-
-- **Adapters are intentionally dumb.** Load a fixture, start a server or execute a fixed sequence, emit structured output, exit. No test logic lives in adapter code.
-- **Fixtures and assertions are separate.** A fixture defines what a server exposes. Test assertions live in the consuming Go repository.
-- **One meaningful source of protocol diversity per phase.** Each adapter capability addition introduces one new direction or protocol layer.
-- **Assertions describe protocol semantics.** Assert error classes or broad outcomes, not byte-identical wire responses.
-
-### Architectural decisions
-
-**Generic MMS interoperability is tested only against libiec61850.**
-`iec61850bean` is an IEC 61850 stack, not a useful second generic MMS implementation. Its MMS layer is not exposed through a practical generic client/server API. Generic MMS coverage is sufficient from the two libiec61850 directions.
-
-**iec61850bean is used at the IEC 61850 semantic layer only.**
-It provides two commands: `iec61850bean-ied-server` and `iec61850bean-ied-client`.
-
-### Adapter output contract
-
-**Stdout — JSON Lines.** Client adapters emit one JSON object per line. Each line is a complete, parseable result:
-
-```jsonl
-{"operation":"read","target":"InteropLD/GGIO1.SPS1.stVal[ST]","ok":true,"value":false}
-{"operation":"write","target":"InteropLD/LLN0.Mod.stVal[ST]","ok":true}
-{"operation":"conclude","ok":true}
-```
-
-**Stderr — diagnostics only.** All library log output goes to stderr. Stdout must contain only JSON Lines.
-
-**Readiness event.** Server adapters emit one JSON object to stdout immediately after the listening socket is open:
-
-```json
-{"event":"ready","address":"0.0.0.0:1102","fixture":"mms-v1","adapter":"libiec61850","version":"0.1.0"}
-```
-
-`fixture` identifies the canonical fixture revision consumed (e.g. `mms-v1`, `iec61850-v1`). `version` is the adapter image version from the `ADAPTER_VERSION` environment variable, defaulting to `dev`.
-
-Go tests wait for this line before dialling. Fixed startup sleeps are prohibited.
-
-**Exit codes:**
-
-| Code | Meaning |
-|------|---------|
-| 0 | Sequence completed; individual operation results determine outcome |
-| 1 | Adapter startup or configuration failure |
-| 2 | Connection failure |
-| 3 | Malformed or unreadable fixture |
-
-### Version pinning
-
-All external adapter dependencies are pinned. A change in an adapter must never silently change reference behaviour.
-
-| Dependency | Pin |
-|------------|-----|
-| libiec61850 | commit SHA pinned in `adapters/libiec61850/Dockerfile` (`libIEC61850_SHA`) |
-| iec61850bean | `com.beanit:iec61850bean:1.9.0` pinned in `adapters/iec61850bean/pom.xml` |
-| Docker base images | digest-pinned (`@sha256:...`) in each Dockerfile |
-
-mms-interop CI records:
-- mms-interop SHA
-- libiec61850 SHA / tag
-- iec61850bean version
-- adapter image digest
-- target platform
-
----
-
-## 2. Delivered adapter infrastructure
-
-### Phase 0 — feasibility spike
-
-Confirmed that libiec61850's internal MMS server API is accessible through private headers. Findings documented in `adapters/libiec61850/SPIKE.md`.
-
-### Delivered adapters
+**Available adapter commands**
 
 | Image | Commands |
 |-------|----------|
-| `mms-interop-libiec61850` | `libiec61850-mms-server`, `libiec61850-mms-client`, `libiec61850-ied-server`, `libiec61850-ied-client`, `libiec61850-ied-reporter` |
-| `mms-interop-iec61850bean` | `iec61850bean-ied-server`, `iec61850bean-ied-client` |
+| `mms-interop-libiec61850` | `libiec61850-mms-server`, `libiec61850-mms-client`, `libiec61850-ied-server`, `libiec61850-ied-controller`, `libiec61850-ied-reporter` |
+| `mms-interop-iec61850bean` | `iec61850bean-ied-server`, `iec61850bean-ied-controller`, `iec61850bean-ied-reporter` |
 
-### Delivered fixtures
-
-| File | Description |
-|------|-------------|
-| `fixtures/mms/interop.json` | MMS domain, variable types, initial values |
-| `fixtures/iec61850/interop.icd` | SCL model (LDs, LNs, DOs, dataset, URCB) |
-| `fixtures/iec61850/values.json` | Runtime values for the IEC 61850 model |
-
-### Consumer coverage
-
-Consumers currently exercise both MMS directions and four IEC 61850 directions across the adapter commands above. The compatibility matrices and feature roadmaps are maintained in `go-mms/INTEROP.md` and `go-iec61850/INTEROP.md`.
-
-See [COVERAGE.md](COVERAGE.md) for adapter command availability.
+**Fixture revision: `iec61850-v2`**
+- Three controllable DOs: SPCSO1 (direct), SPCSO2 (SBO normal), SPCSO3 (SBO enhanced).
+- URCB `urcb01` dataset with SPS1 and Mod.
 
 ---
 
-## 3. Current adapter gaps
+## Milestone M1 — Evidence reconciliation and capability contract (v0.2.0)
 
-| Gap | Status |
-|-----|--------|
-| `iec61850bean-ied-reporter` | Not implemented; needed when `go-iec61850` adds Bean URCB server direction |
-| Multi-URCB fixture members | Single dataset member; extend when consumer requests multi-member report coverage |
-| Direct-control command | No `Oper` adapter yet; needed when `go-iec61850` adds control coverage |
-| Dynamic dataset commands | Not planned until consumer demonstrates the need |
+**Goal:** Every consumer can verify adapter capabilities at runtime. No manually maintained matrix can contradict the machine-readable manifest.
+
+### M1.1 Capability manifest ⬜
+
+Create `fixtures/capabilities.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "adapterVersion": "0.2.0",
+  "fixtureRevision": "iec61850-v2",
+  "commands": {
+    "libiec61850-mms-server":      true,
+    "libiec61850-mms-client":      true,
+    "libiec61850-ied-server":      true,
+    "libiec61850-ied-controller":  true,
+    "libiec61850-ied-reporter":    true,
+    "iec61850bean-ied-server":     true,
+    "iec61850bean-ied-controller": true,
+    "iec61850bean-ied-reporter":   true
+  },
+  "knownLimitations": [
+    {
+      "stack":       "iec61850bean",
+      "version":     "1.x",
+      "direction":   "go-client → iec61850bean-server",
+      "capability":  "SBOw (SelectWithValue)",
+      "reason":      "iec61850bean server does not expose SBOw[CO] as a writable MMS attribute",
+      "reproducedBy": "TestBeanClient_Control_SBOwOperate"
+    }
+  ],
+  "upstreams": {
+    "libiec61850": { "version": "1.6.2", "checksum": "" },
+    "iec61850bean": { "version": "", "artifact": "" }
+  }
+}
+```
+
+### M1.2 Adapter `--capabilities` and `--version` flags ⬜
+
+Every adapter binary must respond to:
+- `<cmd> --capabilities` → emit a JSON Lines capabilities record and exit 0.
+- `<cmd> --version` → emit a JSON Lines version record and exit 0.
+
+Format:
+```json
+{"event":"capabilities","adapterVersion":"0.2.0","fixtureRevision":"iec61850-v2","commands":[...]}
+{"event":"version","adapterVersion":"0.2.0","git":"<sha>"}
+```
+
+### M1.3 Generate COVERAGE.md from manifest ⬜
+
+Replace the manually maintained `COVERAGE.md` with one generated or validated
+from `fixtures/capabilities.json` in CI. A script `scripts/gen-coverage.sh` should
+regenerate it; CI should fail if the committed file is stale.
+
+### M1.4 Harness validation in consumer repos ⬜
+
+The Go interop harness (in `go-iec61850` and `go-mms`) must fail immediately — not silently skip — when:
+- Adapter reports an unexpected `adapterVersion`.
+- A required command is absent from `--capabilities`.
+- Fixture revision is incompatible with the test.
+- A test would skip solely due to missing infrastructure.
+
+This work is implemented in the consumer repos but the adapter contract is defined here.
+
+**Exit criterion:** `fixtures/capabilities.json` is the authoritative statement of adapter versions, upstream versions, fixture revision, available commands, and known unsupported directions. No markdown file may contradict it.
 
 ---
 
-## What is not in this plan
+## Milestone M2 — Fixture and adapter depth (v0.2.x)
 
-| Topic | Reason |
-|-------|--------|
-| Go library compatibility matrices | Owned by `go-mms/INTEROP.md` and `go-iec61850/INTEROP.md` |
-| Go library feature roadmaps | Owned by each Go repository |
-| Go test naming conventions | Documented in each `interop/README.md` |
-| GOOSE, Sampled Values | Different transport; different test infrastructure |
-| Broad vendor compatibility matrix | Overhead without demonstrated need |
-| Conformance certification | Later stage |
-| Metadata overlays, generalized adapter DSL | Overhead without demonstrated need |
+### M2.1 Extended IEC 61850 fixture ⬜
+
+Expand `fixtures/iec61850/interop.icd` beyond the current baseline to include:
+- Common Data Classes: SPS, DPS, MV, INS, SPC, DPC, ACT, BCR.
+- Quality and timestamp attributes.
+- Multiple functional constraints: SP, SV, CO, RP, BR.
+- At least two logical nodes with different CDC profiles.
+
+Expand `fixtures/iec61850/values.json` to match.
+
+### M2.2 Multiple URCBs ⬜
+
+Add a second URCB (`urcb02`) to the fixture with:
+- Different dataset.
+- Different trigger options.
+- Different optional fields.
+
+Required for multi-subscription and isolation testing.
+
+### M2.3 BRCB support ⬜
+
+Add one BRCB (`brcb01`) to the fixture.
+Required for Phase F (BRCB) interop testing.
+Decision on whether to include is deferred to `go-iec61850` PLAN.md Phase F.
+
+### M2.4 Dynamic dataset adapter commands ⬜
+
+For `libiec61850-ied-server` and `iec61850bean-ied-server`:
+- Accept client-created dynamic (association-specific) datasets.
+- Confirm the dataset is usable before reporting back.
+
+Required for Phase D3 (dynamic datasets).
+
+---
+
+## Milestone M3 — Transport and fault injection (v0.3.0)
+
+### M3.1 Packet-fragmenting proxy ⬜
+
+Provide a TCP proxy binary (`mms-interop-proxy`) that can:
+- Split TPKT packets at configured byte boundaries.
+- Join multiple PDUs into one TCP segment.
+- Delay individual frames.
+- Drop frames by position or pattern.
+- Close the TCP connection at defined state transitions.
+
+Consumer repos use this proxy between Go stacks and adapters for fault-injection tests.
+
+### M3.2 Stalling adapter mode ⬜
+
+Add `--stall-before-respond-ms` and `--stall-after-N-pdus` flags to `libiec61850-mms-server`
+for timeout and deadline testing in `go-mms`.
+
+---
+
+## Milestone M4 — Endurance and production evidence (v1.0.0)
+
+### M4.1 Long-running fixture profile ⬜
+
+Add a `fixtures/iec61850/endurance.icd` with:
+- Multiple LDs and LNs.
+- Dense dataset.
+- Multiple URCBs.
+- Multiple controllable DOs.
+
+### M4.2 Digest pin automation ⬜
+
+CI pipeline step that:
+1. Builds and pushes images.
+2. Extracts per-platform digests.
+3. Opens a PR against `go-mms` and `go-iec61850` to update pinned digests in `interop.yml`.
+
+### M4.3 Release evidence archive ⬜
+
+On each tagged release, collect and attach as release artifacts:
+- Capability manifest.
+- Image digests (per-platform).
+- Upstream library versions and checksums.
+- Fixture revision.
+- Go toolchain version used in CI.
+
+**Exit criterion:** A third party can check out the release tag, pull the pinned adapter images, run one command, and reproduce the full compatibility result.
+
+---
+
+## Adapter command contract
+
+All adapters must emit a JSON Lines readiness event before accepting connections:
+
+```json
+{"event":"ready","adapter":"libiec61850","version":"0.2.0","fixture":"iec61850-v2","port":102}
+```
+
+All adapters must accept `--capabilities` and `--version` with no side effects.
+
+All adapters must exit with code 0 on clean conclude, non-zero on error.
+
+---
+
+## Known limitations register
+
+| Stack | Direction | Capability | Reason | Test |
+|-------|-----------|------------|--------|------|
+| `iec61850bean` | go→bean server | SBOw `SelectWithValue` | Server does not expose `SBOw[CO]` as writable MMS | `TestBeanClient_Control_SBOwOperate` (skipped) |
+
+New limitations discovered during interop testing must be added here before a skip is accepted in CI.

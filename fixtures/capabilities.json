@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "adapterVersion": "0.1.1",
+  "fixtureRevision": "iec61850-v2",
+  "commands": {
+    "libiec61850-mms-server":      true,
+    "libiec61850-mms-client":      true,
+    "libiec61850-ied-server":      true,
+    "libiec61850-ied-controller":  true,
+    "libiec61850-ied-reporter":    true,
+    "iec61850bean-ied-server":     true,
+    "iec61850bean-ied-controller": true,
+    "iec61850bean-ied-reporter":   true
+  },
+  "knownLimitations": [
+    {
+      "stack":        "iec61850bean",
+      "version":      "1.x",
+      "direction":    "go-client → iec61850bean-server",
+      "capability":   "SBOw SelectWithValue",
+      "reason":       "iec61850bean server does not expose SBOw[CO] as a writable MMS attribute",
+      "reproducedBy": "TestBeanClient_Control_SBOwOperate"
+    }
+  ],
+  "upstreams": {
+    "libiec61850":  { "version": "1.6.2" },
+    "iec61850bean": { "version": "1.x" }
+  }
+}

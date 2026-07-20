@@ -152,6 +152,7 @@ static MmsDevice* build_device(FixtureDef* f)
 
 int main(int argc, char* argv[])
 {
+    jl_handle_meta_flags(argc, argv, "libiec61850");
     const char* fixture_path = NULL;
     int         port         = 1102;
 

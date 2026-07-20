@@ -40,6 +40,7 @@
 
 #include "iec61850_client.h"
 #include "linked_list.h"
+#include "jsonlines.h"
 
 /* -------------------------------------------------------------------------
  * JSON Line helpers
@@ -297,6 +298,7 @@ static bool op_read_dataset(IedConnection conn, const char* dsRef)
 
 int main(int argc, char** argv)
 {
+    jl_handle_meta_flags(argc, argv, "libiec61850");
     const char* host = "localhost";
     int         port = 1102;
 

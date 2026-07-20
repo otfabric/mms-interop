@@ -39,6 +39,7 @@
 #include <time.h>
 
 #include "iec61850_client.h"
+#include "jsonlines.h"
 
 /* -------------------------------------------------------------------------
  * Constants — fixture-specific
@@ -218,6 +219,7 @@ static void emit_report(const ReportState* st)
 
 int main(int argc, char** argv)
 {
+    jl_handle_meta_flags(argc, argv, "libiec61850");
     const char* host     = "localhost";
     int         port     = 1102;
     bool        initial  = true; /* initial value of SPS1.stVal from values.json */
