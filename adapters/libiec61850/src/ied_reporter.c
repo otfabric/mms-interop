@@ -141,7 +141,8 @@ static void reportCallback(void* param, ClientReport report)
 
     /* Dataset values */
     MmsValue* dsValues = ClientReport_getDataSetValues(report);
-    int n = (dsValues && MmsValue_getType(dsValues) == MMS_STRUCTURE)
+    int n = (dsValues && (MmsValue_getType(dsValues) == MMS_STRUCTURE ||
+                          MmsValue_getType(dsValues) == MMS_ARRAY))
             ? MmsValue_getArraySize(dsValues)
             : 0;
     if (n > DS_SIZE) n = DS_SIZE;

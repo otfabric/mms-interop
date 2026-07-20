@@ -43,10 +43,11 @@ public class IedServer {
             System.exit(1);
         }
         ServerModel model = models.get(0);
+        String iedName = extractIedName(icdPath);
 
         // Apply initial values before handing the model to ServerSap.
         FixtureValues fv = new FixtureValues(valuesPath);
-        applyInitialValues(model, fv);
+        applyInitialValues(model, fv, iedName);
 
         CountDownLatch stopped = new CountDownLatch(1);
 
@@ -73,8 +74,8 @@ public class IedServer {
         String version = System.getenv("ADAPTER_VERSION");
         if (version == null) version = "dev";
         System.out.printf(
-            "{\"event\":\"ready\",\"address\":\"localhost:%d\",\"fixture\":\"iec61850-v1\",\"adapter\":\"iec61850bean\",\"version\":\"%s\"}%n",
-            port, version);
+            "{\"event\":\"ready\",\"address\":\"localhost:%d\",\"fixture\":\"iec61850-v1\",\"adapter\":\"iec61850bean\",\"version\":\"%s\",\"ied_name\":\"%s\"}%n",
+            port, version, iedName);
         System.out.flush();
 
         stopped.await();
@@ -82,16 +83,17 @@ public class IedServer {
 
     // -----------------------------------------------------------------------
 
-    private static void applyInitialValues(ServerModel model, FixtureValues fv) {
-        setInt32(model, "InteropLD/LLN0.Mod.stVal",       Fc.ST, fv.getInt("InteropLD/LLN0.Mod.stVal"));
-        setInt8( model, "InteropLD/LLN0.Mod.ctlModel",    Fc.CF, fv.getInt("InteropLD/LLN0.Mod.ctlModel"));
-        setStr(  model, "InteropLD/LLN0.Mod.d",           Fc.DC, fv.getString("InteropLD/LLN0.Mod.d"));
-        setInt32(model, "InteropLD/LLN0.Beh.stVal",       Fc.ST, fv.getInt("InteropLD/LLN0.Beh.stVal"));
-        setBool( model, "InteropLD/GGIO1.SPS1.stVal",     Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPS1.stVal"));
-        setStr(  model, "InteropLD/GGIO1.SPS1.d",         Fc.DC, fv.getString("InteropLD/GGIO1.SPS1.d"));
-        setBool( model, "InteropLD/GGIO1.SPCSO1.stVal",   Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPCSO1.stVal"));
-        setInt8( model, "InteropLD/GGIO1.SPCSO1.ctlModel",Fc.CF, fv.getInt("InteropLD/GGIO1.SPCSO1.ctlModel"));
-        setFloat(model, "InteropLD/MMXU1.TotW.mag.f",     Fc.MX, fv.getFloat("InteropLD/MMXU1.TotW.mag.f"));
+    private static void applyInitialValues(ServerModel model, FixtureValues fv, String iedName) {
+        String pfx = iedName + "InteropLD/";
+        setInt32(model, pfx + "LLN0.Mod.stVal",       Fc.ST, fv.getInt("InteropLD/LLN0.Mod.stVal"));
+        setInt8( model, pfx + "LLN0.Mod.ctlModel",    Fc.CF, fv.getInt("InteropLD/LLN0.Mod.ctlModel"));
+        setStr(  model, pfx + "LLN0.Mod.d",           Fc.DC, fv.getString("InteropLD/LLN0.Mod.d"));
+        setInt32(model, pfx + "LLN0.Beh.stVal",       Fc.ST, fv.getInt("InteropLD/LLN0.Beh.stVal"));
+        setBool( model, pfx + "GGIO1.SPS1.stVal",     Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPS1.stVal"));
+        setStr(  model, pfx + "GGIO1.SPS1.d",         Fc.DC, fv.getString("InteropLD/GGIO1.SPS1.d"));
+        setBool( model, pfx + "GGIO1.SPCSO1.stVal",   Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPCSO1.stVal"));
+        setInt8( model, pfx + "GGIO1.SPCSO1.ctlModel",Fc.CF, fv.getInt("InteropLD/GGIO1.SPCSO1.ctlModel"));
+        setFloat(model, pfx + "MMXU1.TotW.mag.f",     Fc.MX, fv.getFloat("InteropLD/MMXU1.TotW.mag.f"));
     }
 
     private static void setInt32(ServerModel model, String ref, Fc fc, int value) {
@@ -142,5 +144,21 @@ public class IedServer {
     private static void warn(String ref, Fc fc, String expected, ModelNode actual) {
         System.err.printf("ied-server: WARNING: %s[%s] expected %s, got %s%n",
                 ref, fc, expected, actual == null ? "null" : actual.getClass().getSimpleName());
+    }
+
+    /**
+     * Extracts the IED name from an ICD/SCL file by searching for the first
+     * {@code <IED name="...">} element. Returns an empty string if not found.
+     */
+    private static String extractIedName(String icdPath) {
+        try {
+            String content = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(icdPath)));
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("<IED\\s[^>]*name=\"([^\"]+)\"");
+            java.util.regex.Matcher m = p.matcher(content);
+            if (m.find()) return m.group(1);
+        } catch (Exception e) {
+            System.err.println("ied-server: WARNING: could not extract IED name from " + icdPath + ": " + e.getMessage());
+        }
+        return "";
     }
 }

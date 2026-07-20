@@ -19,18 +19,21 @@
  * addr    — "host:port" or "0.0.0.0:port"
  * fixture — canonical fixture identifier, e.g. "mms-v1" or "iec61850-v1"
  * adapter — adapter name, e.g. "libiec61850"
+ * ied_name — IED name used in MMS domain names (may be empty string)
  * version — image version from $ADAPTER_VERSION env var, fallback "dev"
  */
 static inline void jl_ready(const char* addr,
                              const char* fixture,
-                             const char* adapter)
+                             const char* adapter,
+                             const char* ied_name)
 {
     const char* version = getenv("ADAPTER_VERSION");
     if (!version) version = "dev";
     fprintf(stdout,
             "{\"event\":\"ready\",\"address\":\"%s\","
-            "\"fixture\":\"%s\",\"adapter\":\"%s\",\"version\":\"%s\"}\n",
-            addr, fixture, adapter, version);
+            "\"fixture\":\"%s\",\"adapter\":\"%s\",\"version\":\"%s\","
+            "\"ied_name\":\"%s\"}\n",
+            addr, fixture, adapter, version, ied_name ? ied_name : "");
     fflush(stdout);
 }
 

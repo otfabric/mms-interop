@@ -59,49 +59,40 @@ static void sig_handler(int sig)
 static void set_initial_values(IedServer server)
 {
     /* LLN0.Mod.stVal = 1 (on) */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_LLN0_Mod_stVal,
-        MmsValue_newInteger(1));
+    IedServer_updateInt32AttributeValue(server,
+        &iedModel_InteropLD_LLN0_Mod_stVal, 1);
 
     /* LLN0.Mod.ctlModel = 1 (direct-with-normal-security) */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_LLN0_Mod_ctlModel,
-        MmsValue_newInteger(1));
+    IedServer_updateInt32AttributeValue(server,
+        &iedModel_InteropLD_LLN0_Mod_ctlModel, 1);
 
     /* LLN0.Mod.d = "mode" */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_LLN0_Mod_d,
-        MmsValue_newVisibleString("mode"));
+    IedServer_updateVisibleStringAttributeValue(server,
+        &iedModel_InteropLD_LLN0_Mod_d, "mode");
 
     /* LLN0.Beh.stVal = 1 (on) */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_LLN0_Beh_stVal,
-        MmsValue_newInteger(1));
+    IedServer_updateInt32AttributeValue(server,
+        &iedModel_InteropLD_LLN0_Beh_stVal, 1);
 
     /* GGIO1.SPS1.stVal = false */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_GGIO1_SPS1_stVal,
-        MmsValue_newBoolean(false));
+    IedServer_updateBooleanAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPS1_stVal, false);
 
     /* GGIO1.SPS1.d = "status point" */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_GGIO1_SPS1_d,
-        MmsValue_newVisibleString("status point"));
+    IedServer_updateVisibleStringAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPS1_d, "status point");
 
     /* GGIO1.SPCSO1.stVal = false */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_GGIO1_SPCSO1_stVal,
-        MmsValue_newBoolean(false));
+    IedServer_updateBooleanAttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO1_stVal, false);
 
     /* GGIO1.SPCSO1.ctlModel = 1 (direct-with-normal-security) */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_GGIO1_SPCSO1_ctlModel,
-        MmsValue_newInteger(1));
+    IedServer_updateInt32AttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SPCSO1_ctlModel, 1);
 
     /* MMXU1.TotW.mag.f = 1234.5 */
-    IedServer_updateAttributeValue(server,
-        &iedModel_InteropLD_MMXU1_TotW_mag_f,
-        MmsValue_newFloat(1234.5f));
+    IedServer_updateFloatAttributeValue(server,
+        &iedModel_InteropLD_MMXU1_TotW_mag_f, 1234.5f);
 }
 
 /* -------------------------------------------------------------------------
@@ -130,8 +121,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    /* Allow all writes so the interop write test succeeds. */
-    IedServer_setWriteAccessPolicy(server, IEC61850_FC_ALL, ACCESS_POLICY_ALLOW);
+    /* Allow writes to configuration (CF) and description (DC) attributes
+     * so the interop write tests succeed.
+     * Note: libiec61850's setWriteAccessPolicy does not support IEC61850_FC_ALL
+     * or IEC61850_FC_ST, so we enumerate the writable FCs explicitly. */
+    IedServer_setWriteAccessPolicy(server, IEC61850_FC_CF, ACCESS_POLICY_ALLOW);
+    IedServer_setWriteAccessPolicy(server, IEC61850_FC_DC, ACCESS_POLICY_ALLOW);
+    IedServer_setWriteAccessPolicy(server, IEC61850_FC_SP, ACCESS_POLICY_ALLOW);
 
     set_initial_values(server);
 
@@ -144,7 +140,7 @@ int main(int argc, char** argv)
 
     char addr_buf[64];
     snprintf(addr_buf, sizeof(addr_buf), "0.0.0.0:%d", port);
-    jl_ready(addr_buf, "iec61850-v1", "libiec61850");
+    jl_ready(addr_buf, "iec61850-v1", "libiec61850", iedModel.name);
 
     while (g_running)
         Thread_sleep(100);

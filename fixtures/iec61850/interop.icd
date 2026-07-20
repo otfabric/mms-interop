@@ -40,6 +40,9 @@
 
           <LN0 lnClass="LLN0" inst="" lnType="LLN0_Type"
                desc="Logical node zero">
+            <DOI name="Mod">
+              <DAI name="ctlModel"><Val>1</Val></DAI>
+            </DOI>
             <DataSet name="dsInterop" desc="Interop dataset">
               <!-- Two scalar members — avoids MMS struct serialisation in Phase 2A -->
               <FCDA ldInst="InteropLD" prefix="" lnClass="GGIO" lnInst="1"
@@ -59,7 +62,11 @@
           </LN0>
 
           <LN prefix="" lnClass="GGIO" inst="1" lnType="GGIO1_Type"
-              desc="Generic IO"/>
+              desc="Generic IO">
+            <DOI name="SPCSO1">
+              <DAI name="ctlModel"><Val>1</Val></DAI>
+            </DOI>
+          </LN>
           <LN prefix="" lnClass="MMXU" inst="1" lnType="MMXU1_Type"
               desc="Measurement unit"/>
 

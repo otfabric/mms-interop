@@ -226,7 +226,8 @@ public class IedClient {
 
     private static void readDataSet(ClientAssociation assoc, ServerModel model,
                                     String dsRef) {
-        DataSet ds = model.getDataSet(dsRef);
+        // ServerModel stores datasets with '.' separators; convert from MMS '$' format.
+        DataSet ds = model.getDataSet(dsRef.replace('$', '.'));
         if (ds == null) {
             JsonLines.error("read-dataset", dsRef, "dataset not found in model");
             return;

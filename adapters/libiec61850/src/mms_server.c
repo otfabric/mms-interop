@@ -241,7 +241,7 @@ int main(int argc, char* argv[])
     /* emit readiness event */
     char addr_buf[64];
     snprintf(addr_buf, sizeof(addr_buf), "0.0.0.0:%d", port);
-    jl_ready(addr_buf, "mms-v1", "libiec61850");
+    jl_ready(addr_buf, "mms-v1", "libiec61850", "");
 
     jl_log("listening on port %d", port);
 
