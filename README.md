@@ -67,13 +67,17 @@ Third-party implementations run as separate Docker containers. They are intentio
 
 libiec61850 is built and executed as a separate GPLv3-licensed containerised program and is not linked into the MIT-licensed Go libraries. It is downloaded from a pinned release archive during the Docker build. Distribution of any image containing it must preserve the applicable GPLv3 notices and corresponding source obligations.
 
-Commands:
+The authoritative machine-readable command list is [`fixtures/capabilities.json`](fixtures/capabilities.json) (also rendered as [`COVERAGE.md`](COVERAGE.md)). Do not treat README prose as a capability claim.
+
+Commands currently declared for libiec61850:
 
 - `libiec61850-mms-server` — generic MMS server loaded from `fixtures/mms/interop.json`
 - `libiec61850-mms-client` — generic MMS client, executes a fixed sequence and emits JSON Lines
 - `libiec61850-ied-server` — IEC 61850 IED server loaded from `fixtures/iec61850/`
-- `libiec61850-ied-client` — IEC 61850 client, executes a fixed sequence and emits JSON Lines
+- `libiec61850-ied-controller` — IEC 61850 control client (direct / SBO / SBOw against SPCSO*)
 - `libiec61850-ied-reporter` — IEC 61850 client that subscribes to URCB and emits report fields as JSON Lines
+
+Generic browse/read `*-ied-client` commands are **not** currently declared in the capability manifest (deferred).
 
 ### iec61850bean
 
@@ -81,10 +85,11 @@ Commands:
 
 `iec61850bean` is used at the IEC 61850 semantic layer only. Its MMS layer is not exposed through a practical generic MMS API, so generic MMS interoperability is covered by the libiec61850 directions.
 
-Commands:
+Commands currently declared for iec61850bean (see `fixtures/capabilities.json`):
 
 - `iec61850bean-ied-server` — IEC 61850 IED server loaded from `fixtures/iec61850/`
-- `iec61850bean-ied-client` — IEC 61850 client, executes a fixed sequence and emits JSON Lines
+- `iec61850bean-ied-controller` — IEC 61850 control client (direct / SBO / SBOw against SPCSO*)
+- `iec61850bean-ied-reporter` — IEC 61850 URCB reporter client (JSON Lines)
 
 ## Fixtures
 
@@ -147,16 +152,18 @@ Diagnostics go to stderr. Stdout must contain only JSON Lines.
 
 ## Test directions
 
-Six implemented directions (tests live in `go-mms` and `go-iec61850`):
+Primary directions (tests live in `go-mms`, `go-iec61850`, and consumer CLIs such as `iec61850ctl`):
 
-| Direction | Layer | Go role | Adapter | Phase |
+| Direction | Layer | Go role | Adapter command(s) | Phase |
 |---|---|---|---|---|
-| go-mms client → libiec61850 MMS server | MMS | Client | libiec61850 | 1A |
-| libiec61850 MMS client → go-mms server | MMS | Server | libiec61850 | 1B |
-| go-iec61850 client → libiec61850 IED server | IEC 61850 | Client | libiec61850 | 2A |
-| libiec61850 IED client → go-iec61850 server | IEC 61850 | Server | libiec61850 | 2A |
-| go-iec61850 client → iec61850bean IED server | IEC 61850 | Client | iec61850bean | 2B |
-| iec61850bean IED client → go-iec61850 server | IEC 61850 | Server | iec61850bean | 2B |
+| go-mms client → libiec61850 MMS server | MMS | Client | `libiec61850-mms-server` | 1A |
+| libiec61850 MMS client → go-mms server | MMS | Server | `libiec61850-mms-client` | 1B |
+| go-iec61850 / CLI client → libiec61850 IED server | IEC 61850 | Client | `libiec61850-ied-server` | 2A |
+| libiec61850 controller/reporter → go-iec61850 / CLI server | IEC 61850 | Server | `libiec61850-ied-controller`, `libiec61850-ied-reporter` | 2A / 3A |
+| go-iec61850 / CLI client → iec61850bean IED server | IEC 61850 | Client | `iec61850bean-ied-server` | 2B |
+| iec61850bean controller/reporter → go-iec61850 / CLI server | IEC 61850 | Server | `iec61850bean-ied-controller`, `iec61850bean-ied-reporter` | 2B / 3A |
+
+Generic browse/read `*-ied-client` adapters are not declared in `fixtures/capabilities.json` yet.
 
 ## Building and publishing adapter images
 
