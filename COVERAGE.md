@@ -4,7 +4,7 @@ Availability of adapter commands across the two images. Compatibility matrices f
 
 This file is generated from `fixtures/capabilities.json`; do not edit manually. Run `./scripts/gen-coverage.sh`.
 
-Adapter version: `0.1.3` · Fixture revision: `iec61850-v2`
+Adapter version: `0.1.4` · Fixture revision: `iec61850-v2`
 
 | Adapter command | Image | Available |
 |----------------|-------|:---------:|

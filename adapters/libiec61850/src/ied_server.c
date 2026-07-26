@@ -109,6 +109,10 @@ static void set_initial_values(IedServer server)
     /* MMXU1.TotW.mag.f = 1234.5 */
     IedServer_updateFloatAttributeValue(server,
         &iedModel_InteropLD_MMXU1_TotW_mag_f, 1234.5f);
+
+    /* GGIO1.SetInt1.setVal = 0 (writable ING setting) */
+    IedServer_updateInt32AttributeValue(server,
+        &iedModel_InteropLD_GGIO1_SetInt1_setVal, 0);
 }
 
 /* -------------------------------------------------------------------------

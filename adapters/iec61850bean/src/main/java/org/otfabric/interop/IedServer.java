@@ -142,6 +142,7 @@ public class IedServer {
         setBool( model, pfx + "GGIO1.SPCSO3.stVal",   Fc.ST, fv.getBoolean("InteropLD/GGIO1.SPCSO3.stVal"));
         setInt8( model, pfx + "GGIO1.SPCSO3.ctlModel",Fc.CF, fv.getInt("InteropLD/GGIO1.SPCSO3.ctlModel"));
         setFloat(model, pfx + "MMXU1.TotW.mag.f",     Fc.MX, fv.getFloat("InteropLD/MMXU1.TotW.mag.f"));
+        setInt32(model, pfx + "GGIO1.SetInt1.setVal", Fc.SP, fv.getInt("InteropLD/GGIO1.SetInt1.setVal"));
     }
 
     private static void setInt32(ServerModel model, String ref, Fc fc, int value) {

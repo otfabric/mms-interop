@@ -105,7 +105,15 @@ New types are added only when `go-mms` claims support for them or when they repr
 
 `interop.icd` is the canonical SCL model file (logical devices, logical nodes, data objects, datasets, report control blocks). `values.json` supplies mutable runtime state that SCL cannot express.
 
-Consumer repositories (`go-iec61850`) carry synchronized copies in `interop/testdata/`. The adapter image version and fixture revision must remain compatible — they are updated together.
+Writable scalar setting used by consumer write e2e (ING CDC):
+
+```text
+InteropLD/GGIO1.SetInt1.setVal[SP]
+```
+
+Do not treat `Mod.ctlModel` / `Mod.d` as assumed-success write targets.
+
+Consumer repositories (`go-iec61850`, `iec61850ctl`) carry synchronized copies in `interop/testdata/` / `e2e/testdata/`. The adapter image version and fixture revision must remain compatible — they are updated together.
 
 ## Consuming the adapter images
 
