@@ -181,13 +181,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    /* Allow writes to configuration (CF) and description (DC) attributes
-     * so the interop write tests succeed.
-     * Note: libiec61850's setWriteAccessPolicy does not support IEC61850_FC_ALL
-     * or IEC61850_FC_ST, so we enumerate the writable FCs explicitly. */
+    /* Allow writes needed by the fixed IED-client sequence and control tests.
+     * ST is required so Mod.stVal can be written by *-ied-client (same-stack
+     * smoke and reverse Go-server tests use that path). */
     IedServer_setWriteAccessPolicy(server, IEC61850_FC_CF, ACCESS_POLICY_ALLOW);
     IedServer_setWriteAccessPolicy(server, IEC61850_FC_DC, ACCESS_POLICY_ALLOW);
     IedServer_setWriteAccessPolicy(server, IEC61850_FC_SP, ACCESS_POLICY_ALLOW);
+    IedServer_setWriteAccessPolicy(server, IEC61850_FC_ST, ACCESS_POLICY_ALLOW);
 
     set_initial_values(server);
 

@@ -70,10 +70,12 @@ The result schema must not grow into a protocol-neutral test specification. Perm
 
 | Code | Condition |
 |---|---|
-| 0 | Sequence completed; individual operation results determine test outcome |
+| 0 | Sequence completed and every emitted operation has `ok:true` |
 | 1 | Startup or configuration failure |
 | 2 | Connection failure |
-| 3 | Malformed or unreadable fixture |
+| 3 | Malformed or unreadable fixture, **or** one or more operations emitted `ok:false` |
+
+Fixed-sequence clients (for example `*-ied-client`) must still attempt `conclude` after an operation failure, then exit `3` when any prior operation failed. Connection failure remains exit `2` and must not be reported as a successful conclude.
 
 **REQ-3.7** Adapters must not contain assertions, test logic or adapter-specific fixture overrides.
 

@@ -7,31 +7,23 @@ import java.net.InetAddress;
 import java.util.*;
 
 /**
- * iec61850bean IED client adapter for mms-interop Phase 2B.
+ * iec61850bean IED client adapter for mms-interop.
  *
  * <p>Executes the same fixed operation sequence as the libiec61850 IED client
  * (see {@code adapters/libiec61850/src/ied_client.c}) and emits one JSON Line
  * per operation to stdout, using identical field names and value encoding.
  *
- * <p>Operation sequence:
- * <ol>
- *   <li>get-server-directory  — list logical devices</li>
- *   <li>get-ld-directory      — list logical nodes in InteropLD</li>
- *   <li>get-ln-directory      — list unique data objects in InteropLD/GGIO1</li>
- *   <li>read (ST)             — InteropLD/GGIO1.SPS1.stVal</li>
- *   <li>read (MX)             — InteropLD/MMXU1.TotW.mag.f</li>
- *   <li>read (CF)             — InteropLD/LLN0.Mod.ctlModel</li>
- *   <li>read (DC)             — InteropLD/LLN0.Mod.d</li>
- *   <li>write (ST)            — InteropLD/LLN0.Mod.stVal = 5</li>
- *   <li>read-dataset          — InteropLD/LLN0$dsInterop</li>
- *   <li>conclude              — disconnect</li>
- * </ol>
+ * <p>The logical device name is resolved from the server directory: bare
+ * {@code InteropLD} against go-iec61850, or IED-prefixed
+ * {@code InteropIEDInteropLD} against libiec61850 / iec61850bean servers.
  *
- * <p>Command-line arguments:
- * <pre>
- *   --host H    server host (default: localhost)
- *   --port P    server TCP port (default: 1102)
- * </pre>
+ * <p>Exit codes:
+ * <ul>
+ *   <li>0 — all operations ok:true</li>
+ *   <li>1 — argument / startup error</li>
+ *   <li>2 — connection / associate failure</li>
+ *   <li>3 — one or more operations emitted ok:false (conclude still attempted)</li>
+ * </ul>
  */
 public class IedClient {
 
@@ -45,192 +37,201 @@ public class IedClient {
                 case "--port" -> port = Integer.parseInt(args[++i]);
             }
         }
+        if (port <= 0 || port > 65535) {
+            System.err.println("ied-client: invalid port " + port);
+            System.exit(1);
+        }
 
         ClientSap clientSap = new ClientSap();
         ClientAssociation assoc;
         try {
             assoc = clientSap.associate(InetAddress.getByName(host), port, null, null);
         } catch (Exception e) {
-            JsonLines.error("conclude", null, "connect " + host + ":" + port + ": " + e.getMessage());
+            JsonLines.error("associate", null, "connect " + host + ":" + port + ": " + e.getMessage());
             System.exit(2);
             return;
         }
+        JsonLines.success("associate");
 
+        boolean failed = false;
         try {
-            // Retrieve the complete model tree (triggers all GetDirectory services).
             ServerModel model = assoc.retrieveModel();
-            // Populate persistent dataset definitions (dsInterop is defined in the ICD).
             assoc.updateDataSets();
 
-            // 1. get-server-directory
             List<String> ldNames = new ArrayList<>();
-            for (ModelNode ld : model) {
-                ldNames.add(ld.getName());
+            for (ModelNode ldNode : model) {
+                ldNames.add(ldNode.getName());
             }
             JsonLines.successNames("get-server-directory", null, ldNames);
 
-            // 2. get-ld-directory for InteropLD
-            ModelNode interopLD = model.findModelNode("InteropLD", null);
-            if (interopLD == null) {
-                JsonLines.error("get-ld-directory", "InteropLD", "not found in model");
+            String ld = resolveInteropLd(ldNames);
+            if (ld == null) {
+                JsonLines.error("get-server-directory", null, "no logical device found");
+                failed = true;
             } else {
-                List<String> lnNames = new ArrayList<>();
-                for (ModelNode ln : interopLD) {
-                    lnNames.add(ln.getName());
-                }
-                JsonLines.successNames("get-ld-directory", "InteropLD", lnNames);
-
-                // 3. get-ln-directory for InteropLD/GGIO1
-                // FCDOs with the same DO name but different FCs appear as separate children;
-                // emit unique DO names preserving first-seen order.
-                ModelNode ggio1 = model.findModelNode("InteropLD/GGIO1", null);
-                if (ggio1 == null) {
-                    JsonLines.error("get-ln-directory", "InteropLD/GGIO1", "not found in model");
+                ModelNode interopLD = model.findModelNode(ld, null);
+                if (interopLD == null) {
+                    JsonLines.error("get-ld-directory", ld, "not found in model");
+                    failed = true;
                 } else {
-                    Set<String> seen = new LinkedHashSet<>();
-                    for (ModelNode fcdo : ggio1) {
-                        seen.add(fcdo.getName());
+                    List<String> lnNames = new ArrayList<>();
+                    for (ModelNode ln : interopLD) {
+                        lnNames.add(ln.getName());
                     }
-                    JsonLines.successNames("get-ln-directory", "InteropLD/GGIO1",
-                            new ArrayList<>(seen));
+                    JsonLines.successNames("get-ld-directory", ld, lnNames);
+
+                    String ggio1Ref = ld + "/GGIO1";
+                    ModelNode ggio1 = model.findModelNode(ggio1Ref, null);
+                    if (ggio1 == null) {
+                        JsonLines.error("get-ln-directory", ggio1Ref, "not found in model");
+                        failed = true;
+                    } else {
+                        Set<String> seen = new LinkedHashSet<>();
+                        for (ModelNode fcdo : ggio1) {
+                            seen.add(fcdo.getName());
+                        }
+                        JsonLines.successNames("get-ln-directory", ggio1Ref,
+                                new ArrayList<>(seen));
+                    }
                 }
+
+                failed |= !readBool(assoc, model, ld + "/GGIO1.SPS1.stVal", Fc.ST,
+                        ld + "/GGIO1.SPS1.stVal[ST]");
+                failed |= !readFloatMagF(assoc, model, ld);
+                failed |= !readInt8(assoc, model, ld + "/LLN0.Mod.ctlModel", Fc.CF,
+                        ld + "/LLN0.Mod.ctlModel[CF]");
+                failed |= !readString(assoc, model, ld + "/LLN0.Mod.d", Fc.DC,
+                        ld + "/LLN0.Mod.d[DC]");
+                failed |= !writeInt32(assoc, model, ld + "/LLN0.Mod.stVal", Fc.ST,
+                        ld + "/LLN0.Mod.stVal[ST]", 5);
+                failed |= !readDataSet(assoc, model, ld + "/LLN0$dsInterop");
             }
 
-            // 4. read GGIO1.SPS1.stVal[ST]
-            readBool(assoc, model, "InteropLD/GGIO1.SPS1.stVal", Fc.ST,
-                    "InteropLD/GGIO1.SPS1.stVal[ST]");
-
-            // 5. read MMXU1.TotW.mag.f[MX]
-            // Read at the FcDataObject level (TotW[MX]) to avoid any server-side
-            // restriction on single-BDA reads for nested constructed attributes.
-            readFloatMagF(assoc, model);
-
-            // 6. read LLN0.Mod.ctlModel[CF]
-            readInt8(assoc, model, "InteropLD/LLN0.Mod.ctlModel", Fc.CF,
-                    "InteropLD/LLN0.Mod.ctlModel[CF]");
-
-            // 7. read LLN0.Mod.d[DC]
-            readString(assoc, model, "InteropLD/LLN0.Mod.d", Fc.DC,
-                    "InteropLD/LLN0.Mod.d[DC]");
-
-            // 8. write LLN0.Mod.stVal[ST] = 5
-            writeInt32(assoc, model, "InteropLD/LLN0.Mod.stVal", Fc.ST,
-                    "InteropLD/LLN0.Mod.stVal[ST]", 5);
-
-            // 9. read-dataset InteropLD/LLN0$dsInterop
-            readDataSet(assoc, model, "InteropLD/LLN0$dsInterop");
-
         } finally {
-            // 10. conclude — always attempt a clean disconnect.
             try {
                 assoc.disconnect();
             } catch (Exception ignored) {}
             JsonLines.success("conclude");
         }
+
+        if (failed) {
+            System.exit(3);
+        }
     }
 
-    // -----------------------------------------------------------------------
-    // Read helpers
-    // -----------------------------------------------------------------------
+    /** Prefer bare InteropLD, else first name ending with InteropLD, else first LD. */
+    static String resolveInteropLd(List<String> ldNames) {
+        if (ldNames == null || ldNames.isEmpty()) {
+            return null;
+        }
+        if (ldNames.contains("InteropLD")) {
+            return "InteropLD";
+        }
+        for (String name : ldNames) {
+            if (name != null && name.endsWith("InteropLD")) {
+                return name;
+            }
+        }
+        return ldNames.get(0);
+    }
 
-    private static void readBool(ClientAssociation assoc, ServerModel model,
-                                 String ref, Fc fc, String target) {
+    private static boolean readBool(ClientAssociation assoc, ServerModel model,
+                                    String ref, Fc fc, String target) {
         ModelNode node = model.findModelNode(ref, fc);
         if (!(node instanceof BdaBoolean bda)) {
             JsonLines.error("read", target, "model node not found or wrong type");
-            return;
+            return false;
         }
         try {
             assoc.getDataValues((FcModelNode) bda);
             JsonLines.successReadBool(target, bda.getValue());
+            return true;
         } catch (Exception e) {
             JsonLines.error("read", target, e.getMessage());
+            return false;
         }
     }
 
-    private static void readFloatMagF(ClientAssociation assoc, ServerModel model) {
-        // Read TotW[MX] as a whole, then extract mag.f from the populated model.
-        String target = "InteropLD/MMXU1.TotW.mag.f[MX]";
-        ModelNode totW = model.findModelNode("InteropLD/MMXU1.TotW", Fc.MX);
+    private static boolean readFloatMagF(ClientAssociation assoc, ServerModel model, String ld) {
+        String target = ld + "/MMXU1.TotW.mag.f[MX]";
+        ModelNode totW = model.findModelNode(ld + "/MMXU1.TotW", Fc.MX);
         if (!(totW instanceof FcModelNode totWFc)) {
             JsonLines.error("read", target, "TotW[MX] not found in model");
-            return;
+            return false;
         }
         try {
             assoc.getDataValues(totWFc);
-            // Navigate to mag.f — values were updated in-place by getDataValues.
-            ModelNode f = model.findModelNode("InteropLD/MMXU1.TotW.mag.f", Fc.MX);
+            ModelNode f = model.findModelNode(ld + "/MMXU1.TotW.mag.f", Fc.MX);
             if (!(f instanceof BdaFloat32 bda)) {
                 JsonLines.error("read", target, "TotW.mag.f[MX] not found after read");
-                return;
+                return false;
             }
             JsonLines.successReadFloat(target, bda.getFloat());
+            return true;
         } catch (Exception e) {
             JsonLines.error("read", target, e.getMessage());
+            return false;
         }
     }
 
-    private static void readInt8(ClientAssociation assoc, ServerModel model,
-                                 String ref, Fc fc, String target) {
+    private static boolean readInt8(ClientAssociation assoc, ServerModel model,
+                                    String ref, Fc fc, String target) {
         ModelNode node = model.findModelNode(ref, fc);
         if (!(node instanceof BdaInt8 bda)) {
             JsonLines.error("read", target, "model node not found or wrong type");
-            return;
+            return false;
         }
         try {
             assoc.getDataValues((FcModelNode) bda);
             JsonLines.successReadInt(target, bda.getValue());
+            return true;
         } catch (Exception e) {
             JsonLines.error("read", target, e.getMessage());
+            return false;
         }
     }
 
-    private static void readString(ClientAssociation assoc, ServerModel model,
-                                   String ref, Fc fc, String target) {
+    private static boolean readString(ClientAssociation assoc, ServerModel model,
+                                      String ref, Fc fc, String target) {
         ModelNode node = model.findModelNode(ref, fc);
         if (!(node instanceof BdaVisibleString bda)) {
             JsonLines.error("read", target, "model node not found or wrong type");
-            return;
+            return false;
         }
         try {
             assoc.getDataValues((FcModelNode) bda);
             JsonLines.successReadString(target, bda.getStringValue());
+            return true;
         } catch (Exception e) {
             JsonLines.error("read", target, e.getMessage());
+            return false;
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Write helper
-    // -----------------------------------------------------------------------
-
-    private static void writeInt32(ClientAssociation assoc, ServerModel model,
-                                   String ref, Fc fc, String target, int value) {
+    private static boolean writeInt32(ClientAssociation assoc, ServerModel model,
+                                      String ref, Fc fc, String target, int value) {
         ModelNode node = model.findModelNode(ref, fc);
         if (!(node instanceof BdaInt32 bda)) {
             JsonLines.error("write", target, "model node not found or wrong type");
-            return;
+            return false;
         }
         try {
             bda.setValue(value);
             assoc.setDataValues((FcModelNode) bda);
             JsonLines.successTarget("write", target);
+            return true;
         } catch (Exception e) {
             JsonLines.error("write", target, e.getMessage());
+            return false;
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Dataset helper
-    // -----------------------------------------------------------------------
-
-    private static void readDataSet(ClientAssociation assoc, ServerModel model,
-                                    String dsRef) {
-        // ServerModel stores datasets with '.' separators; convert from MMS '$' format.
+    private static boolean readDataSet(ClientAssociation assoc, ServerModel model,
+                                       String dsRef) {
         DataSet ds = model.getDataSet(dsRef.replace('$', '.'));
         if (ds == null) {
             JsonLines.error("read-dataset", dsRef, "dataset not found in model");
-            return;
+            return false;
         }
         try {
             assoc.getDataSetValues(ds);
@@ -242,8 +243,10 @@ public class IedClient {
             }
             sb.append("]");
             JsonLines.successDataSet(dsRef, sb.toString());
+            return true;
         } catch (Exception e) {
             JsonLines.error("read-dataset", dsRef, e.getMessage());
+            return false;
         }
     }
 

@@ -1,14 +1,16 @@
 {
   "schemaVersion": 1,
-  "adapterVersion": "0.1.1",
+  "adapterVersion": "0.1.3",
   "fixtureRevision": "iec61850-v2",
   "commands": {
     "libiec61850-mms-server":      true,
     "libiec61850-mms-client":      true,
     "libiec61850-ied-server":      true,
+    "libiec61850-ied-client":      true,
     "libiec61850-ied-controller":  true,
     "libiec61850-ied-reporter":    true,
     "iec61850bean-ied-server":     true,
+    "iec61850bean-ied-client":     true,
     "iec61850bean-ied-controller": true,
     "iec61850bean-ied-reporter":   true
   },

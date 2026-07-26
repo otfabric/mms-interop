@@ -74,10 +74,9 @@ Commands currently declared for libiec61850:
 - `libiec61850-mms-server` — generic MMS server loaded from `fixtures/mms/interop.json`
 - `libiec61850-mms-client` — generic MMS client, executes a fixed sequence and emits JSON Lines
 - `libiec61850-ied-server` — IEC 61850 IED server loaded from `fixtures/iec61850/`
+- `libiec61850-ied-client` — IEC 61850 general browse/read/write/dataset client (fixed sequence)
 - `libiec61850-ied-controller` — IEC 61850 control client (direct / SBO / SBOw against SPCSO*)
 - `libiec61850-ied-reporter` — IEC 61850 client that subscribes to URCB and emits report fields as JSON Lines
-
-Generic browse/read `*-ied-client` commands are **not** currently declared in the capability manifest (deferred).
 
 ### iec61850bean
 
@@ -88,6 +87,7 @@ Generic browse/read `*-ied-client` commands are **not** currently declared in th
 Commands currently declared for iec61850bean (see `fixtures/capabilities.json`):
 
 - `iec61850bean-ied-server` — IEC 61850 IED server loaded from `fixtures/iec61850/`
+- `iec61850bean-ied-client` — IEC 61850 general browse/read/write/dataset client (fixed sequence)
 - `iec61850bean-ied-controller` — IEC 61850 control client (direct / SBO / SBOw against SPCSO*)
 - `iec61850bean-ied-reporter` — IEC 61850 URCB reporter client (JSON Lines)
 
@@ -159,11 +159,11 @@ Primary directions (tests live in `go-mms`, `go-iec61850`, and consumer CLIs suc
 | go-mms client → libiec61850 MMS server | MMS | Client | `libiec61850-mms-server` | 1A |
 | libiec61850 MMS client → go-mms server | MMS | Server | `libiec61850-mms-client` | 1B |
 | go-iec61850 / CLI client → libiec61850 IED server | IEC 61850 | Client | `libiec61850-ied-server` | 2A |
-| libiec61850 controller/reporter → go-iec61850 / CLI server | IEC 61850 | Server | `libiec61850-ied-controller`, `libiec61850-ied-reporter` | 2A / 3A |
+| libiec61850 client/controller/reporter → go-iec61850 / CLI server | IEC 61850 | Server | `libiec61850-ied-client`, `-controller`, `-reporter` | 2A / 3A / 3B |
 | go-iec61850 / CLI client → iec61850bean IED server | IEC 61850 | Client | `iec61850bean-ied-server` | 2B |
-| iec61850bean controller/reporter → go-iec61850 / CLI server | IEC 61850 | Server | `iec61850bean-ied-controller`, `iec61850bean-ied-reporter` | 2B / 3A |
+| iec61850bean client/controller/reporter → go-iec61850 / CLI server | IEC 61850 | Server | `iec61850bean-ied-client`, `-controller`, `-reporter` | 2B / 3A / 3B |
 
-Generic browse/read `*-ied-client` adapters are not declared in `fixtures/capabilities.json` yet.
+Fixed-sequence `*-ied-client` adapters exit `3` when any operation emits `ok:false` (after attempting conclude). Connection failure remains exit `2`.
 
 ## Building and publishing adapter images
 

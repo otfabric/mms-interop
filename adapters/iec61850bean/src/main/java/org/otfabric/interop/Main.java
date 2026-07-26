@@ -29,8 +29,8 @@ public class Main {
                 System.out.printf(
                     "{\"event\":\"capabilities\",\"adapterVersion\":\"%s\","
                     + "\"fixtureRevision\":\"%s\","
-                    + "\"commands\":[\"iec61850bean-ied-server\",\"iec61850bean-ied-controller\","
-                    + "\"iec61850bean-ied-reporter\"]}%n",
+                    + "\"commands\":[\"iec61850bean-ied-server\",\"iec61850bean-ied-client\","
+                    + "\"iec61850bean-ied-controller\",\"iec61850bean-ied-reporter\"]}%n",
                     version, FIXTURE_REVISION);
                 System.exit(0);
             }

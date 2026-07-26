@@ -86,15 +86,15 @@ static inline void jl_handle_meta_flags(int argc, char** argv, const char* adapt
                     "{\"event\":\"capabilities\",\"adapterVersion\":\"%s\","
                     "\"fixtureRevision\":\"iec61850-v2\","
                     "\"commands\":[\"libiec61850-mms-server\",\"libiec61850-mms-client\","
-                    "\"libiec61850-ied-server\",\"libiec61850-ied-controller\","
-                    "\"libiec61850-ied-reporter\"]}\n",
+                    "\"libiec61850-ied-server\",\"libiec61850-ied-client\","
+                    "\"libiec61850-ied-controller\",\"libiec61850-ied-reporter\"]}\n",
                     version);
         } else {
             fprintf(stdout,
                     "{\"event\":\"capabilities\",\"adapterVersion\":\"%s\","
                     "\"fixtureRevision\":\"iec61850-v2\","
-                    "\"commands\":[\"iec61850bean-ied-server\",\"iec61850bean-ied-controller\","
-                    "\"iec61850bean-ied-reporter\"]}\n",
+                    "\"commands\":[\"iec61850bean-ied-server\",\"iec61850bean-ied-client\","
+                    "\"iec61850bean-ied-controller\",\"iec61850bean-ied-reporter\"]}\n",
                     version);
         }
         fflush(stdout);

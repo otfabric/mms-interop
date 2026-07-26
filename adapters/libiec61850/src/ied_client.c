@@ -9,6 +9,7 @@
  * --host HOST --port PORT and emits one JSON Line per operation to stdout.
  *
  * Operation sequence:
+ *   0.  associate             — TCP/MMS association
  *   1.  get-server-directory  — list logical devices
  *   2.  get-ld-directory      — list logical nodes in InteropLD
  *   3.  get-ln-directory      — list data objects in InteropLD/GGIO1
@@ -29,9 +30,10 @@
  *   {"operation":"<op>","ok":false,"error":"<msg>"}
  *
  * Exit codes:
- *   0  — all operations completed (individual results in stdout)
+ *   0  — all operations completed with ok:true
  *   1  — argument / startup error
  *   2  — connection failure
+ *   3  — one or more operations emitted ok:false (conclude still attempted)
  */
 
 #include <stdio.h>
@@ -130,7 +132,40 @@ static const char* ied_error_str(IedClientError err)
  * Phase 2A operation helpers
  * ---------------------------------------------------------------------- */
 
-static bool op_get_server_directory(IedConnection conn)
+/* Prefer bare "InteropLD" (go-iec61850), else IED-prefixed "...InteropLD"
+ * (libiec61850 / iec61850bean servers), else the first LD name. */
+static bool resolve_interop_ld(LinkedList names, char* out, size_t out_len)
+{
+    const char* fallback = NULL;
+    LinkedList cur = LinkedList_getNext(names);
+    while (cur) {
+        const char* name = (const char*)cur->data;
+        if (!fallback)
+            fallback = name;
+        if (!strcmp(name, "InteropLD")) {
+            snprintf(out, out_len, "%s", name);
+            return true;
+        }
+        cur = LinkedList_getNext(cur);
+    }
+    cur = LinkedList_getNext(names);
+    while (cur) {
+        const char* name = (const char*)cur->data;
+        size_t n = strlen(name);
+        if (n >= 9 && !strcmp(name + n - 9, "InteropLD")) {
+            snprintf(out, out_len, "%s", name);
+            return true;
+        }
+        cur = LinkedList_getNext(cur);
+    }
+    if (fallback) {
+        snprintf(out, out_len, "%s", fallback);
+        return true;
+    }
+    return false;
+}
+
+static bool op_get_server_directory(IedConnection conn, char* ld_out, size_t ld_len)
 {
     IedClientError err;
     LinkedList lds = IedConnection_getServerDirectory(conn, &err, false);
@@ -139,6 +174,12 @@ static bool op_get_server_directory(IedConnection conn)
         return false;
     }
     emit_names("get-server-directory", NULL, lds);
+    bool ok = resolve_interop_ld(lds, ld_out, ld_len);
+    if (!ok) {
+        emit_error("get-server-directory", NULL, "no logical device found");
+        LinkedList_destroyDeep(lds, free);
+        return false;
+    }
     LinkedList_destroyDeep(lds, free);
     return true;
 }
@@ -320,35 +361,50 @@ int main(int argc, char** argv)
     if (err != IED_ERROR_OK) {
         fprintf(stderr, "ied-client: connect %s:%d: %s\n",
                 host, port, ied_error_str(err));
+        emit_error("associate", NULL, ied_error_str(err));
         IedConnection_destroy(conn);
         return 2;
     }
+    printf("{\"operation\":\"associate\",\"ok\":true}\n");
+    fflush(stdout);
 
-    /* Phase 2A fixed sequence */
-    op_get_server_directory(conn);
-    op_get_ld_directory(conn, "InteropLD");
-    op_get_ln_directory(conn, "InteropLD/GGIO1");
+    /* Fixed sequence — continue after failures; always conclude.
+     * LD name is resolved from get-server-directory: bare InteropLD against
+     * go-iec61850, or InteropIEDInteropLD against libiec61850/bean servers. */
+    bool failed = false;
+    char ld[128] = {0};
+    char ref[256];
+    failed |= !op_get_server_directory(conn, ld, sizeof(ld));
+    if (ld[0] == '\0')
+        snprintf(ld, sizeof(ld), "InteropLD");
 
-    /* Read ST */
-    op_read_bool(conn, "InteropLD/GGIO1.SPS1.stVal",  IEC61850_FC_ST);
-    /* Read MX */
-    op_read_float(conn, "InteropLD/MMXU1.TotW.mag.f", IEC61850_FC_MX);
-    /* Read CF */
-    op_read_int(conn,   "InteropLD/LLN0.Mod.ctlModel", IEC61850_FC_CF);
-    /* Read DC */
-    op_read_string(conn, "InteropLD/LLN0.Mod.d",       IEC61850_FC_DC);
+    failed |= !op_get_ld_directory(conn, ld);
 
-    /* Write ST */
-    op_write_int(conn, "InteropLD/LLN0.Mod.stVal", IEC61850_FC_ST, 5);
+    snprintf(ref, sizeof(ref), "%s/GGIO1", ld);
+    failed |= !op_get_ln_directory(conn, ref);
 
-    /* Read dataset */
-    op_read_dataset(conn, "InteropLD/LLN0$dsInterop");
+    snprintf(ref, sizeof(ref), "%s/GGIO1.SPS1.stVal", ld);
+    failed |= !op_read_bool(conn, ref, IEC61850_FC_ST);
 
-    /* Conclude */
+    snprintf(ref, sizeof(ref), "%s/MMXU1.TotW.mag.f", ld);
+    failed |= !op_read_float(conn, ref, IEC61850_FC_MX);
+
+    snprintf(ref, sizeof(ref), "%s/LLN0.Mod.ctlModel", ld);
+    failed |= !op_read_int(conn, ref, IEC61850_FC_CF);
+
+    snprintf(ref, sizeof(ref), "%s/LLN0.Mod.d", ld);
+    failed |= !op_read_string(conn, ref, IEC61850_FC_DC);
+
+    snprintf(ref, sizeof(ref), "%s/LLN0.Mod.stVal", ld);
+    failed |= !op_write_int(conn, ref, IEC61850_FC_ST, 5);
+
+    snprintf(ref, sizeof(ref), "%s/LLN0$dsInterop", ld);
+    failed |= !op_read_dataset(conn, ref);
+
     IedConnection_close(conn);
     printf("{\"operation\":\"conclude\",\"ok\":true}\n");
     fflush(stdout);
 
     IedConnection_destroy(conn);
-    return 0;
+    return failed ? 3 : 0;
 }

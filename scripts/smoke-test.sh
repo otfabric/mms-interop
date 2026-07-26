@@ -170,6 +170,53 @@ check_json_lines() {
 }
 
 # ---------------------------------------------------------------------------
+# Check: IED client sequence is complete and successful for smoke purposes.
+#
+# Same-stack servers historically deny ST writes to Mod.stVal (SCL status FC);
+# reverse tests against go-iec61850 validate that write. Smoke requires every
+# non-write operation to succeed, and accepts write ok:true or access-denied.
+# ---------------------------------------------------------------------------
+check_ied_client_ops() {
+    local label="$1" output="$2"
+    if ! echo "$output" | grep -q '"operation":"associate"'; then
+        fail "${label}: missing associate operation"
+        return
+    fi
+    if ! echo "$output" | grep -q '"operation":"conclude"'; then
+        fail "${label}: missing conclude operation"
+        return
+    fi
+    local bad
+    bad=$(echo "$output" | python3 -c '
+import sys, json
+bad = []
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        o = json.loads(line)
+    except Exception:
+        bad.append("invalid-json")
+        continue
+    if o.get("ok", True):
+        continue
+    op = o.get("operation", "?")
+    err = str(o.get("error", "")).lower()
+    if op == "write" and ("access" in err or "denied" in err or "violation" in err):
+        continue
+    bad.append("%s:%s" % (op, o.get("error", "")))
+if bad:
+    print("; ".join(bad))
+' 2>/dev/null || true)
+    if [ -n "$bad" ]; then
+        fail "${label}: unexpected ok:false — ${bad}"
+        return
+    fi
+    pass "${label}: associate/conclude present; ops ok (ST write access-denied allowed)"
+}
+
+# ---------------------------------------------------------------------------
 # Check: required binary exists inside image.
 # ---------------------------------------------------------------------------
 check_binary() {
@@ -207,6 +254,21 @@ check_binary "$IEC61850BEAN_IMAGE" iec61850bean-ied-server
 check_binary "$IEC61850BEAN_IMAGE" iec61850bean-ied-client
 
 info ""
+info "=== Capabilities declare IED clients ==="
+check_capabilities_command() {
+    local image="$1" entrypoint="$2" required="$3"
+    local out
+    out=$(docker run --rm --entrypoint "$entrypoint" "$image" --capabilities 2>/dev/null || true)
+    if echo "$out" | grep -q "\"$required\""; then
+        pass "${entrypoint} --capabilities includes ${required}"
+    else
+        fail "${entrypoint} --capabilities missing ${required}: ${out}"
+    fi
+}
+check_capabilities_command "$LIBIEC61850_IMAGE" libiec61850-ied-client libiec61850-ied-client
+check_capabilities_command "$IEC61850BEAN_IMAGE" iec61850bean-ied-client iec61850bean-ied-client
+
+info ""
 info "=== Fixture files ==="
 check_fixture_file "$LIBIEC61850_IMAGE" /fixtures/mms/interop.json
 check_fixture_file "$LIBIEC61850_IMAGE" /fixtures/iec61850/interop.icd
@@ -239,6 +301,7 @@ output=$(run_client_pair \
     "$LIBIEC61850_IMAGE" libiec61850-ied-server \
     "$LIBIEC61850_IMAGE" libiec61850-ied-client)
 check_json_lines "libiec61850-ied-client" "$output"
+check_ied_client_ops "libiec61850-ied-client" "$output"
 
 output=$(run_client_pair \
     "$LIBIEC61850_IMAGE" libiec61850-ied-server \
@@ -249,6 +312,7 @@ output=$(run_client_pair \
     "$IEC61850BEAN_IMAGE" iec61850bean-ied-server \
     "$IEC61850BEAN_IMAGE" iec61850bean-ied-client)
 check_json_lines "iec61850bean-ied-client" "$output"
+check_ied_client_ops "iec61850bean-ied-client" "$output"
 
 # ===========================================================================
 # Summary

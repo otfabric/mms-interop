@@ -108,12 +108,13 @@ verify-binaries: build ## Verify all required binaries are present in the adapte
 	@echo "--- Checking binaries in $(LIBIEC61850_IMAGE) ---"
 	@for bin in libiec61850-mms-server libiec61850-mms-client \
 	            libiec61850-ied-server libiec61850-ied-client \
-	            libiec61850-ied-reporter; do \
+	            libiec61850-ied-controller libiec61850-ied-reporter; do \
 	  docker run --rm --entrypoint sh $(LIBIEC61850_IMAGE) -c "command -v $$bin" \
 	    && echo "  OK: $$bin" || echo "  MISSING: $$bin"; \
 	done
 	@echo "--- Checking binaries in $(IEC61850BEAN_IMAGE) ---"
-	@for bin in iec61850bean-ied-server iec61850bean-ied-client; do \
+	@for bin in iec61850bean-ied-server iec61850bean-ied-client \
+	            iec61850bean-ied-controller iec61850bean-ied-reporter; do \
 	  docker run --rm --entrypoint sh $(IEC61850BEAN_IMAGE) -c "command -v $$bin" \
 	    && echo "  OK: $$bin" || echo "  MISSING: $$bin"; \
 	done
